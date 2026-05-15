@@ -1,0 +1,214 @@
+{
+  "name": "workflow-2-discord-poster",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "triggerAtDay": [
+                1,
+                2,
+                3,
+                4,
+                5
+              ],
+              "triggerAtHour": 9
+            }
+          ]
+        }
+      },
+      "id": "67a75f5a-fe0a-49ce-bb77-c56bd9c2a4c0",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -656,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM menu_items WHERE menu_date = CURRENT_DATE::text ORDER BY category, subcategory;",
+        "options": {}
+      },
+      "id": "3ae683ae-36ee-4bd3-8241-8c1690bdd08f",
+      "name": "Get Today's Menu",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -448,
+        80
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "lQtOsRtHK1YErWfA",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "check-menu-found",
+              "leftValue": "=={{ $input.first().json.campus !== undefined && $input.first().json.campus !== null }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {
+          "looseTypeValidation": true
+        }
+      },
+      "id": "62b247e3-1221-4cfa-a40e-f78cd2876d6f",
+      "name": "Menu Found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -224,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nif (!items || items.length === 0) {\n  return [{ json: { message: '⚠️ No menu found for today.' } }];\n}\n\nconst firstItem = items[0].json;\nconst menuDate = firstItem.menu_date;\nconst dayName = firstItem.day_name;\n\nconst grouped = {};\nfor (const item of items) {\n  const d = item.json;\n  const key = `${d.category}|||${d.subcategory}`;\n  if (!grouped[key]) grouped[key] = [];\n  grouped[key].push(d);\n}\n\nconst order = [\n  { key: 'Set Meals|||Campus Lunch (1)',  emoji: '🥘' },\n  { key: 'Set Meals|||Campus Lunch (2)',  emoji: '🍲' },\n  { key: 'A La Carte|||A La Carte',       emoji: '🍛' },\n  { key: 'A La Carte|||Curry Set',        emoji: '🍛' },\n  { key: 'Noodles|||Ramen',              emoji: '🍜' },\n  { key: 'Noodles|||Udon and Soba',      emoji: '🍝' },\n  { key: 'Sides|||Side Dish A',          emoji: '🥗' },\n  { key: 'Sides|||Side Dish B',          emoji: '🥗' },\n  { key: 'Sides|||Side Dish C',          emoji: '🥗' },\n  { key: 'Sides|||Salad',               emoji: '🥬' },\n];\n\nconst categoryEmojis = {\n  'Set Meals':  '🍱',\n  'A La Carte': '🍛',\n  'Noodles':    '🍜',\n  'Sides':      '🥗',\n};\n\nlet message = `#Uzumasa Campus — ${dayName}, ${menuDate}\\n\\n`;\n\nlet lastCategory = null;\n\nfor (const { key, emoji } of order) {\n  if (!grouped[key]) continue;\n\n  const [category, subcategory] = key.split('|||');\n  const dishes = grouped[key];\n\n  // Category header\n  if (category !== lastCategory) {\n    if (lastCategory !== null) message += '\\n';\n    const catEmoji = categoryEmojis[category] || '🍴';\n    message += `## ${catEmoji} ${category}\\n`;\n    lastCategory = category;\n  }\n\n  // Subcategory label (skip if same as category)\n  if (subcategory.toLowerCase() !== category.toLowerCase()) {\n    message += `**— ${subcategory} —**\\n`;\n  }\n\n  for (const dish of dishes) {\n    message += `> ${emoji} **${dish.dish_name}**\\n`;\n\n    const nutrition = [];\n    if (dish.calories) nutrition.push(`${dish.calories} kcal`);\n    if (dish.protein) nutrition.push(`Protein ${dish.protein}g`);\n    if (dish.fat) nutrition.push(`Fat ${dish.fat}g`);\n\n    if (nutrition.length > 0) {\n      message += `> 📊 ${nutrition.join('  ·  ')}\\n`;\n    }\n\n    if (dish.allergens) {\n      message += `> ⚠️ *${dish.allergens}*\\n`;\n    }\n\n    message += '\\n';\n  }\n}\n\nmessage += `\\n━━━━━━━━━━━━━━━━━━━━━━\\n`;\nmessage += `🎫 Tickets from **10:30 AM**  ·  🕚 Open **11:00 AM – 2:00 PM**`;\n\n// Split into chunks under 2000 chars\nconst chunks = [];\nlet remaining = message;\nwhile (remaining.length > 1900) {\n  let splitAt = remaining.lastIndexOf('\\n', 1900);\n  if (splitAt === -1) splitAt = 1900;\n  chunks.push(remaining.substring(0, splitAt));\n  remaining = remaining.substring(splitAt).trim();\n}\nif (remaining.length > 0) chunks.push(remaining);\n\nreturn chunks.map(chunk => ({ json: { discordMessage: chunk } }));"
+      },
+      "id": "8e36617f-0f18-4ca4-9ade-617b3c10c57e",
+      "name": "Format Menu Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "YOUR_DISCORD_WEBHOOK_URL",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ \"content\": \"<@&1504158073516851221> \\n\" + $json.discordMessage }) }}",
+        "options": {}
+      },
+      "id": "7d9702de-a1f3-4b6e-8a44-f903a636f989",
+      "name": "Send to Discord",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        224,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "YOUR_DISCORD_WEBHOOK_URL",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"content\": \"🚨 **System Alert** | <@722771046125797428>\\n**Service:** University Menu Bot\\n**Status:** Failed to locate menu\\n**Action Required:** Please check if the menu was scraped successfully\"\n}",
+        "options": {}
+      },
+      "id": "439e64b1-a15a-4495-a074-865dbcd40261",
+      "name": "Notify: No Menu",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        208
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Today's Menu",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Today's Menu": {
+      "main": [
+        [
+          {
+            "node": "Menu Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Menu Found?": {
+      "main": [
+        [
+          {
+            "node": "Format Menu Message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Notify: No Menu",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Menu Message": {
+      "main": [
+        [
+          {
+            "node": "Send to Discord",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send to Discord": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "timezone": "Asia/Tokyo",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "f220575d-6733-4c99-8a20-a49ac338b52a",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "5b4a0ca6498fd61cba60c9657cf36de7506227ece441bf76eec1568c00adef6b"
+  },
+  "id": "KaV8NvPHaTjiITWW",
+  "tags": []
+}

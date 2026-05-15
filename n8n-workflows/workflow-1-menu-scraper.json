@@ -1,0 +1,505 @@
+{
+  "name": "workflow-1-menu-scraper",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "triggerAtDay": [
+                6
+              ],
+              "triggerAtHour": 11
+            }
+          ]
+        }
+      },
+      "id": "c4a70bb5-bb12-40eb-ba14-6104b2a5dee5",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -432,
+        -48
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "limit": 1,
+        "simple": false,
+        "filters": {
+          "q": "subject:レストランのランチメニューについて newer_than:14d"
+        },
+        "options": {}
+      },
+      "id": "42ad0098-1087-4677-bbf3-47307989148c",
+      "name": "Search Gmail",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [
+        -224,
+        -48
+      ],
+      "webhookId": "YOUR_WEBHOOK_ID",
+      "alwaysOutputData": true,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "check-email-found",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "709d5011-d218-44d4-b244-739159edb1a7",
+      "name": "Email Found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        16,
+        -48
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const htmlBody = $input.item.json.html || '';\nif (!htmlBody) throw new Error('No HTML body found in email.');\n\nconst hrefPattern = /href=\"(https:\\/\\/kyotogakuen1-my\\.sharepoint\\.com[^\"]+)\"/gi;\nconst links = [];\nlet match;\nwhile ((match = hrefPattern.exec(htmlBody)) !== null) {\n  links.push(match[1]);\n}\n\nif (links.length === 0) {\n  throw new Error('No SharePoint links found.');\n}\n\n// Only Uzumasa for now\nreturn [\n  { pdfUrl: links[2] || links[0], campus: 'Uzumasa' },\n];"
+      },
+      "id": "aeb3702d-5499-496b-a0e4-92e0501e0e6a",
+      "name": "Extract PDF URL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        -128
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://192.168.40.99:3456/fetch-pdf",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"url\": \"{{ $json.pdfUrl }}\" }",
+        "options": {
+          "redirect": {
+            "redirect": {
+              "maxRedirects": 5
+            }
+          },
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "9fa9194d-2068-441e-a7b1-4aa71b375d4c",
+      "name": "Download PDF",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        448,
+        -128
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const base64Pdf = $input.item.json.base64Pdf;\nif (!base64Pdf) throw new Error('No PDF returned from fetcher VM');\n\nconst campus = $('Extract PDF URL').item.json.campus || 'Campus';\n\nconst now = new Date();\nconst weekOf = now.toISOString().slice(0, 10);\n\nreturn { base64Pdf, campus, weekOf };"
+      },
+      "id": "3b10a790-ec3f-4038-8f93-14cc706552d7",
+      "name": "Prepare PDF for Claude",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        -128
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "anthropic-beta",
+              "value": "pdfs-2024-09-25"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-6\",\n  \"max_tokens\": 8000,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": [\n        {\n          \"type\": \"document\",\n          \"source\": {\n            \"type\": \"base64\",\n            \"media_type\": \"application/pdf\",\n            \"data\": \"{{ $json.base64Pdf }}\"\n          }\n        },\n        {\n          \"type\": \"text\",\n          \"text\": \"Extract the complete weekly lunch menu from this PDF for Uzumasa campus.\\n\\nReturn ONLY a valid JSON array, no other text, no markdown, no backticks.\\n\\nThe menu has these exact sections and subcategories:\\n- category: 'Set Meals', subcategory: 'Campus Lunch (1)'\\n- category: 'Set Meals', subcategory: 'Campus Lunch (2)'\\n- category: 'A La Carte', subcategory: 'A La Carte'\\n- category: 'Noodles', subcategory: 'Ramen'\\n- category: 'Noodles', subcategory: 'Udon and Soba'\\n- category: 'Sides', subcategory: 'Side Dish A'\\n- category: 'Sides', subcategory: 'Side Dish B'\\n- category: 'Sides', subcategory: 'Side Dish C'\\n- category: 'Sides', subcategory: 'Salad'\\n\\nEach item must have these exact fields:\\n{\\n  \\\"day_name\\\": \\\"Monday\\\",\\n  \\\"menu_date\\\": \\\"2026-05-11\\\",\\n  \\\"category\\\": \\\"Set Meals\\\",\\n  \\\"subcategory\\\": \\\"Campus Lunch (1)\\\",\\n  \\\"dish_name\\\": \\\"Hokkaido Corn Croquette and Whitefish Fry\\\",\\n  \\\"allergens\\\": \\\"Milk, Wheat, Shrimp\\\",\\n  \\\"calories\\\": 453,\\n  \\\"protein\\\": 14.8,\\n  \\\"fat\\\": 21.4,\\n  \\\"sodium\\\": 2.4\\n}\\n\\nRules:\\n- Include ALL days and ALL dishes\\n- Use null for any field not shown\\n- menu_date must be YYYY-MM-DD format\\n- For Udon and Soba, list each option as a separate item\\n- Return ONLY the JSON array, nothing else\"\n        }\n      ]\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "71d5a49c-c7e3-419b-a9a4-2f61c21da85a",
+      "name": "Claude: Extract Menu",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        896,
+        -128
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "=POST",
+        "url": "YOUR_DISCORD_WEBHOOK_URL",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"content\": \"🚨 **System Alert** | <@722771046125797428>\\n**Service:** University Menu Bot\\n**Status:** Failed to locate menu email\\n**Action Required:** Please verify the Gmail search query or check if the university has delayed the weekly update.\"\n}",
+        "options": {}
+      },
+      "id": "a4c9dce7-3448-4438-bc4b-1f3981ff3570",
+      "name": "Notify: No Email Found",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        224,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const content = $input.item.json.content;\n\n// Get campus from the current input item's chain\n// The Claude node receives campus via Prepare PDF node\nconst campus = $input.item.json.campus || \n               $('Prepare PDF for Claude').item.json.campus ||\n               'Unknown';\n\nconst textBlock = content.find(block => block.type === 'text');\nif (!textBlock) throw new Error('No text block in Claude response');\n\nconst rawText = textBlock.text;\n\nlet dishes;\ntry {\n  dishes = JSON.parse(rawText);\n} catch(e) {\n  throw new Error('Parse failed: ' + e.message);\n}\n\nif (!Array.isArray(dishes)) {\n  throw new Error('Not an array');\n}\n\nconst weekOf = dishes[0]?.menu_date || new Date().toISOString().slice(0, 10);\n\nreturn dishes\n  .filter(dish => dish.dish_name && dish.dish_name.trim() !== '')\n  .map(dish => ({\n    campus,\n    week_of: weekOf.substring(0, 10),\n    day_name: dish.day_name || null,\n    menu_date: dish.menu_date ? dish.menu_date.substring(0, 10) : null,\n    category: dish.category || null,\n    subcategory: dish.subcategory || null,\n    dish_name: dish.dish_name,\n    allergens: dish.allergens || null,\n    calories: dish.calories || null,\n    protein: dish.protein || null,\n    fat: dish.fat || null,\n    sodium: dish.sodium || null,\n  }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1104,
+        -128
+      ],
+      "id": "6d81a879-8f1d-41b7-90ff-305c8ccac1fb",
+      "name": "Claude Output Parser"
+    },
+    {
+      "parameters": {
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "menu_items",
+          "mode": "list",
+          "cachedResultName": "menu_items"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {
+            "id": 0,
+            "calories": 0,
+            "protein": 0,
+            "fat": 0,
+            "sodium": 0
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "campus",
+              "displayName": "campus",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "week_of",
+              "displayName": "week_of",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "day_name",
+              "displayName": "day_name",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "menu_date",
+              "displayName": "menu_date",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "category",
+              "displayName": "category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "dish_name",
+              "displayName": "dish_name",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "allergens",
+              "displayName": "allergens",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "calories",
+              "displayName": "calories",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "protein",
+              "displayName": "protein",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "fat",
+              "displayName": "fat",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "sodium",
+              "displayName": "sodium",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "subcategory",
+              "displayName": "subcategory",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1312,
+        -128
+      ],
+      "id": "aedd5802-4b3b-4b8e-92ab-036526db1b37",
+      "name": "Insert rows in a table",
+      "retryOnFail": true,
+      "credentials": {
+        "postgres": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Postgres account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Search Gmail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Gmail": {
+      "main": [
+        [
+          {
+            "node": "Email Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Found?": {
+      "main": [
+        [
+          {
+            "node": "Extract PDF URL",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Notify: No Email Found",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract PDF URL": {
+      "main": [
+        [
+          {
+            "node": "Download PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download PDF": {
+      "main": [
+        [
+          {
+            "node": "Prepare PDF for Claude",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare PDF for Claude": {
+      "main": [
+        [
+          {
+            "node": "Claude: Extract Menu",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: Extract Menu": {
+      "main": [
+        [
+          {
+            "node": "Claude Output Parser",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Output Parser": {
+      "main": [
+        [
+          {
+            "node": "Insert rows in a table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "timezone": "Asia/Tokyo",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "c13a8df4-613d-4bb6-b390-c102ba7bc1e5",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "5b4a0ca6498fd61cba60c9657cf36de7506227ece441bf76eec1568c00adef6b"
+  },
+  "id": "Xwsf0dr5hQ6rvihs",
+  "tags": []
+}
