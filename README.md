@@ -59,8 +59,13 @@ Two n8n workflows handle the work. The first runs on Saturdays to scrape and sto
 
 ## Project Structure
 
+
 ```
 campus-lunch-pipeline/
+├── assets/
+│   ├── discord-screenshot.png
+│   ├── workflow-1.png
+│   └── workflow-2.png
 ├── playwright-api/
 │   ├── server.js               # Express + Playwright PDF fetcher
 │   ├── save-session.js         # Microsoft session saver (run manually)
@@ -77,9 +82,11 @@ campus-lunch-pipeline/
 ├── docs/
 │   └── sharepoint-session-renewal.md
 ├── SETUP.md
-├── ARCHITECTURE.md
 ├── CHANGELOG.md
-└── LICENSE
+├── CONTRIBUTING.md
+├── LICENSE
+├── README.md
+└── image.png
 ```
 
 ---
