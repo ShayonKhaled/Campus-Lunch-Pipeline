@@ -8,6 +8,8 @@ A self-hosted automation pipeline that scrapes a university's weekly lunch menu 
 
 Built for my university's specific email and SharePoint setup. If you want to adapt it for another institution, the architecture is reusable but the credentials, email parsing logic, and PDF structure will likely need changes. Please treat this as a reference implementation rather than a drop-in solution.
 
+![alt text](/assets/discord-screenshot.png)
+
 ---
 ## How It Works
 The cafeteria sends a weekly email every Friday containing a link to a PDF menu hosted on Microsoft SharePoint. This pipeline picks that up and handles the rest automatically.
@@ -30,6 +32,15 @@ The cafeteria sends a weekly email every Friday containing a link to a PDF menu 
 ```
 
 Two n8n workflows handle the work. The first runs on Saturdays to scrape and store the week's menu. The second runs Monday through Friday at 9 AM JST to query that day's menu and post it to Discord.
+
+[![Workflow 1 — Node flow](assets/workflow-1.png)](assets/workflow-1.png)
+
+*Figure: Node layout for Workflow 1 (click to view full-size).*
+
+
+[![Workflow 2 — Node flow](assets/workflow-2.png)](assets/workflow-2.png)
+
+*Figure: Node layout for Workflow 2 (click to view full-size).*
 
 ---
 
@@ -109,9 +120,11 @@ Full setup instructions are in [SETUP.md](./SETUP.md). At a high level:
 
 ## Roadmap
 - [ ] Add halal-friendly menu items
+- [ ] Improve error handling & observability for n8n workflows 
 - [ ] Add support for Kameoka campus
 - [ ] Deduplicate recurring weekly items like the Curry Set
 - [ ] Automate Microsoft session renewal
+
 
 
 ---
