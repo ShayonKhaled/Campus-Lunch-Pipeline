@@ -38,12 +38,12 @@ Two n8n workflows handle the work. The first runs on Saturdays to scrape and sto
 
 | Component | Technology |
 |---|---|
-| Workflow automation | n8n (self-hosted) |
+| Workflow automation | n8n |
 | PDF fetching | Playwright + Express (Node.js) |
 | AI extraction | Claude (Anthropic API) |
 | Database | PostgreSQL |
 | Notifications | Discord webhook |
-| Infrastructure | Proxmox, self-hosted |
+| Infrastructure | Proxmox |
 
 ---
 
@@ -56,7 +56,6 @@ campus-lunch-pipeline/
 │   ├── save-session.js         # Microsoft session saver (run manually)
 │   ├── test-session.js         # Verify session is working
 │   ├── package.json
-│   ├── menu-fetcher.service    # systemd unit file
 │   └── README.md
 ├── n8n-workflows/
 │   ├── workflow-1-menu-scraper.json
@@ -110,10 +109,10 @@ Full setup instructions are in [SETUP.md](./SETUP.md). At a high level:
 ---
 
 ## Roadmap
-- [ ] Add halal menu items
+- [ ] Add halal-friendly menu items
 - [ ] Add support for Kameoka campus
-- [ ] Automate Microsoft session renewal
 - [ ] Deduplicate recurring weekly items like the Curry Set
+- [ ] Automate Microsoft session renewal
 
 
 ---
