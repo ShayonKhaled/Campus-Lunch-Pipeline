@@ -110,10 +110,11 @@ Full setup instructions are in [SETUP.md](./SETUP.md). At a high level:
 ---
 
 ## Roadmap
-
+- [ ] Add halal menu items
 - [ ] Add support for Kameoka campus
 - [ ] Automate Microsoft session renewal
 - [ ] Deduplicate recurring weekly items like the Curry Set
+
 
 ---
 
