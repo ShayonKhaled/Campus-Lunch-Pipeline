@@ -7,10 +7,9 @@
 A self-hosted automation pipeline that scrapes a university's weekly lunch menu from email, extracts structured data using Claude, stores it in PostgreSQL, and posts daily menu updates to a Discord channel.
 
 Built for my university's specific email and SharePoint setup. If you want to adapt it for another institution, the architecture is reusable but the credentials, email parsing logic, and PDF structure will likely need changes. Please treat this as a reference implementation rather than a drop-in solution.
+
 ---
-
 ## How It Works
-
 The cafeteria sends a weekly email every Friday containing a link to a PDF menu hosted on Microsoft SharePoint. This pipeline picks that up and handles the rest automatically.
 
 

@@ -11,33 +11,25 @@ Overview
 - The dump was produced with `pg_dump` (PostgreSQL 18.x) and is a schema-only file suitable for initializing a database for this project.
 
 Applying the schema
-1. Create or select a PostgreSQL database to use (example uses `campus_lunch`):
+
+Basic steps to apply the schema are in `SETUP.md`. In brief:
 
 ```bash
-sudo -u postgres createdb campus_lunch
-```
+# create DB (run as postgres user)
+createdb campus_lunch
 
-2. Apply the schema file:
-
-```bash
-sudo -u postgres psql -d campus_lunch -f schema.sql
-```
-
-Or, if you have a DB user with privileges:
-
-```bash
-psql "postgresql://dbuser@localhost:5432/campus_lunch" -f schema.sql
+# apply schema
+psql -d campus_lunch -f schema.sql
 ```
 
 Notes
-- Postgres version: schema was exported from PostgreSQL 18.x; it should work on recent PostgreSQL releases but test on staging if you run an older version.
-- The dump contains `ALTER TABLE ... OWNER TO postgres` statements — adjust ownership or run as a superuser if needed.
-- Do not store connection strings or passwords in this folder. Use environment variables or your secret manager for credentials used by the application.
+- The dump was exported from PostgreSQL 18.x; test on staging for older servers.
+- `schema.sql` contains ownership statements (`OWNER TO postgres`) — run as a superuser or remove those lines if needed.
+- Keep connection strings and passwords out of the repo; use environment variables or a secret manager.
 
 Troubleshooting
-- If you see permission or owner errors when applying the dump, either run the import as a superuser or remove/modify `OWNER TO` lines from `schema.sql` before importing.
-- If your application cannot connect, verify `pg_hba.conf` and that the database user has the required privileges.
+- Permission/owner errors: run import as superuser or remove `OWNER TO` lines.
+- Connection failures: verify `pg_hba.conf`, DB user privileges, and network access.
 
-After setup
-- Configure your application's database credentials in n8n and in `playwright-api` (if applicable) following the instructions in the top-level `README.md`.
+See `SETUP.md` for full setup and additional notes.
 
