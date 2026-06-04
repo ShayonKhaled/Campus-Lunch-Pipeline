@@ -1,5 +1,5 @@
 {
-  "name": "workflow-1-menu-scraper",
+  "name": "workflow-1-menu-scraper-kameoka",
   "nodes": [
     {
       "parameters": {
@@ -30,7 +30,7 @@
         "limit": 1,
         "simple": false,
         "filters": {
-          "q": "subject:レストランのランチメニューについて newer_than:14d"
+          "q": "subject:\u30ec\u30b9\u30c8\u30e9\u30f3\u306e\u30e9\u30f3\u30c1\u30e1\u30cb\u30e5\u30fc\u306b\u3064\u3044\u3066 newer_than:14d"
         },
         "options": {}
       },
@@ -86,7 +86,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const htmlBody = $input.item.json.html || '';\nif (!htmlBody) throw new Error('No HTML body found in email.');\n\nconst hrefPattern = /href=\"(https:\\/\\/kyotogakuen1-my\\.sharepoint\\.com[^\"]+)\"/gi;\nconst links = [];\nlet match;\nwhile ((match = hrefPattern.exec(htmlBody)) !== null) {\n  links.push(match[1]);\n}\n\nif (links.length === 0) {\n  throw new Error('No SharePoint links found.');\n}\n\n// Uzumasa campus (index 2 in the email's SharePoint links)\nreturn [\n  { pdfUrl: links[2] || links[0], campus: 'Uzumasa' },\n];"
+        "jsCode": "const htmlBody = $input.item.json.html || '';\nif (!htmlBody) throw new Error('No HTML body found in email.');\n\nconst hrefPattern = /href=\"(https:\\/\\/kyotogakuen1-my\\.sharepoint\\.com[^\"]+)\"/gi;\nconst links = [];\nlet match;\nwhile ((match = hrefPattern.exec(htmlBody)) !== null) {\n  links.push(match[1]);\n}\n\nif (links.length === 0) {\n  throw new Error('No SharePoint links found.');\n}\n\n// Kameoka campus (last SharePoint link in the email)\nreturn [\n  { pdfUrl: links[links.length - 1], campus: 'Kameoka' },\n];"
       },
       "id": "aeb3702d-5499-496b-a0e4-92e0501e0e6a",
       "name": "Extract PDF URL",
@@ -162,7 +162,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-6\",\n  \"max_tokens\": 8000,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": [\n        {\n          \"type\": \"document\",\n          \"source\": {\n            \"type\": \"base64\",\n            \"media_type\": \"application/pdf\",\n            \"data\": \"{{ $json.base64Pdf }}\"\n          }\n        },\n        {\n          \"type\": \"text\",\n          \"text\": \"Extract the complete weekly lunch menu from this PDF for Uzumasa campus.\\n\\nReturn ONLY a valid JSON array, no other text, no markdown, no backticks.\\n\\nThe menu has these exact sections and subcategories:\\n- category: 'Set Meals', subcategory: 'Campus Lunch (1)'\\n- category: 'Set Meals', subcategory: 'Campus Lunch (2)'\\n- category: 'A La Carte', subcategory: 'A La Carte'\\n- category: 'Noodles', subcategory: 'Ramen'\\n- category: 'Noodles', subcategory: 'Udon and Soba'\\n- category: 'Sides', subcategory: 'Side Dish A'\\n- category: 'Sides', subcategory: 'Side Dish B'\\n- category: 'Sides', subcategory: 'Side Dish C'\\n- category: 'Sides', subcategory: 'Salad'\\n\\nEach item must have these exact fields:\\n{\\n  \\\"day_name\\\": \\\"Monday\\\",\\n  \\\"menu_date\\\": \\\"2026-05-11\\\",\\n  \\\"category\\\": \\\"Set Meals\\\",\\n  \\\"subcategory\\\": \\\"Campus Lunch (1)\\\",\\n  \\\"dish_name\\\": \\\"Hokkaido Corn Croquette and Whitefish Fry\\\",\\n  \\\"allergens\\\": \\\"Milk, Wheat, Shrimp\\\",\\n  \\\"calories\\\": 453,\\n  \\\"protein\\\": 14.8,\\n  \\\"fat\\\": 21.4,\\n  \\\"sodium\\\": 2.4\\n}\\n\\nRules:\\n- Include ALL days and ALL dishes\\n- Use null for any field not shown\\n- menu_date must be YYYY-MM-DD format\\n- For Udon and Soba, list each option as a separate item\\n- Return ONLY the JSON array, nothing else\"\n        }\n      ]\n    }\n  ]\n}",
+        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-6\",\n  \"max_tokens\": 8000,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": [\n        {\n          \"type\": \"document\",\n          \"source\": {\n            \"type\": \"base64\",\n            \"media_type\": \"application/pdf\",\n            \"data\": \"{{ $json.base64Pdf }}\"\n          }\n        },\n        {\n          \"type\": \"text\",\n          \"text\": \"Extract the complete weekly lunch menu from this PDF for Kameoka campus.\\n\\nReturn ONLY a valid JSON array, no other text, no markdown, no backticks.\\n\\nThe menu has these exact sections and subcategories:\\n- category: 'Set', subcategory: 'A'\\n- category: 'Set', subcategory: 'B'\\n- category: 'Live Kitchen', subcategory: 'Live Kitchen'\\n- category: 'Curry', subcategory: 'A'\\n- category: 'Curry', subcategory: 'B'\\n- category: 'Curry', subcategory: 'C'\\n- category: 'Ramen', subcategory: 'Ramen'\\n- category: 'Side Dish', subcategory: 'A'\\n- category: 'Side Dish', subcategory: 'B'\\n- category: 'Side Dish', subcategory: 'C'\\n- category: 'Side Dish', subcategory: 'Salad'\\n\\nEach item must have these exact fields:\\n{\\n  \\\"day_name\\\": \\\"Monday\\\",\\n  \\\"menu_date\\\": \\\"2026-06-01\\\",\\n  \\\"category\\\": \\\"SET\\\",\\n  \\\"subcategory\\\": \\\"A\\\",\\n  \\\"dish_name\\\": \\\"Teppan Panko Pork Loin with BBQ Sauce\\\",\\n  \\\"allergens\\\": \\\"Milk, Wheat\\\",\\n  \\\"calories\\\": 453,\\n  \\\"protein\\\": 14.8,\\n  \\\"fat\\\": 21.4,\\n  \\\"sodium\\\": 2.4\\n}\\n\\nRules:\\n- Include ALL days (Monday through Friday) and ALL dishes\\n- Use null for any field not shown\\n- menu_date must be YYYY-MM-DD format\\n- The Live Kitchen section has a single entry per day; use subcategory 'Live Kitchen'\\n- Return ONLY the JSON array, nothing else\"\n        }\n      ]\n    }\n  ]\n}",
         "options": {}
       },
       "id": "71d5a49c-c7e3-419b-a9a4-2f61c21da85a",
@@ -186,7 +186,7 @@
         "url": "YOUR_DISCORD_WEBHOOK_URL",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"content\": \"🚨 **System Alert** | <@722771046125797428>\\n**Service:** University Menu Bot\\n**Status:** Failed to locate menu email\\n**Action Required:** Please verify the Gmail search query or check if the university has delayed the weekly update.\"\n}",
+        "jsonBody": "={\n  \"content\": \"\ud83d\udea8 **System Alert** | <@722771046125797428>\\n**Service:** University Menu Bot\\n**Status:** Failed to locate menu email\\n**Action Required:** Please verify the Gmail search query or check if the university has delayed the weekly update.\"\n}",
         "options": {}
       },
       "id": "a4c9dce7-3448-4438-bc4b-1f3981ff3570",
@@ -200,7 +200,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const content = $input.item.json.content;\n\n// Get campus from the current input item's chain\n// The Claude node receives campus via Prepare PDF node\nconst campus = $input.item.json.campus || \n               $('Prepare PDF for Claude').item.json.campus ||\n               'Unknown';\n\nconst textBlock = content.find(block => block.type === 'text');\nif (!textBlock) throw new Error('No text block in Claude response');\n\nconst rawText = textBlock.text;\n\nlet dishes;\ntry {\n  dishes = JSON.parse(rawText);\n} catch(e) {\n  throw new Error('Parse failed: ' + e.message);\n}\n\nif (!Array.isArray(dishes)) {\n  throw new Error('Not an array');\n}\n\nconst weekOf = dishes[0]?.menu_date || new Date().toISOString().slice(0, 10);\n\nreturn dishes\n  .filter(dish => dish.dish_name && dish.dish_name.trim() !== '')\n  .map(dish => ({\n    campus,\n    week_of: weekOf.substring(0, 10),\n    day_name: dish.day_name || null,\n    menu_date: dish.menu_date ? dish.menu_date.substring(0, 10) : null,\n    category: dish.category || null,\n    subcategory: dish.subcategory || null,\n    dish_name: dish.dish_name,\n    allergens: dish.allergens || null,\n    calories: dish.calories || null,\n    protein: dish.protein || null,\n    fat: dish.fat || null,\n    sodium: dish.sodium || null,\n  }));"
+        "jsCode": "const content = $input.item.json.content;\n\n// Get campus from the current input item's chain\n// The Claude node receives campus via Prepare PDF node\nconst campus = $input.item.json.campus || \n               $('Prepare PDF for Claude').item.json.campus ||\n               'Unknown';\n\nconst textBlock = content.find(block => block.type === 'text');\nif (!textBlock) throw new Error('No text block in Claude response');\n\nconst rawText = textBlock.text;\n\nlet dishes;\ntry {\n  dishes = JSON.parse(rawText);\n} catch(e) {\n  throw new Error('Parse failed: ' + e.message);\n}\n\nif (!Array.isArray(dishes)) {\n  throw new Error('Not an array');\n}\n\nconst weekOf = dishes[0]?.menu_date || new Date().toISOString().slice(0, 10);\n\nreturn dishes\n  .filter(dish => dish.dish_name && dish.dish_name.trim() !== '')\n  .map(dish => {\n    // Normalize to Title Case for consistency\n    const titleCase = (str) => str ? str.replace(/\\b\\w+/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()) : null;\n    return ({\n    campus,\n    week_of: weekOf.substring(0, 10),\n    day_name: dish.day_name || null,\n    menu_date: dish.menu_date ? dish.menu_date.substring(0, 10) : null,\n    category: titleCase(dish.category) || null,\n    subcategory: titleCase(dish.subcategory) || null,\n    dish_name: dish.dish_name,\n    allergens: dish.allergens || null,\n    calories: dish.calories || null,\n    protein: dish.protein || null,\n    fat: dish.fat || null,\n    sodium: dish.sodium || null,\n    });\n  }));"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,

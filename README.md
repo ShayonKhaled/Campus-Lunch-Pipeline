@@ -74,6 +74,7 @@ campus-lunch-pipeline/
 │   └── README.md
 ├── n8n-workflows/
 │   ├── workflow-1-menu-scraper.json
+│   ├── workflow-1-menu-scraper-kameoka.json
 │   ├── workflow-2-discord-poster.json
 │   └── README.md
 ├── database/
@@ -119,7 +120,7 @@ Full setup instructions are in [SETUP.md](./SETUP.md). At a high level:
 
 ## Known Limitations
 
-- **Kameoka campus not implemented.** The second campus PDF uses a different layout and has been deferred. Currently, the Uzumasa campus is processed. 
+- **Kameoka campus now supported.** Both Uzumasa and Kameoka campuses are scraped via separate n8n workflows (`workflow-1-menu-scraper.json` and `workflow-1-menu-scraper-kameoka.json`).
 - **Microsoft session expires periodically.** Every few weeks the SharePoint session needs to be manually renewed. When it expires, the pipeline sends a Discord alert automatically.
 - **Curry Set is stored once per weekday** even though it is the same item all week.
 
@@ -128,7 +129,7 @@ Full setup instructions are in [SETUP.md](./SETUP.md). At a high level:
 ## Roadmap
 - [ ] Add halal-friendly menu items
 - [ ] Improve error handling & observability for n8n workflows 
-- [ ] Add support for Kameoka campus
+- [x] Add support for Kameoka campus
 - [ ] Deduplicate recurring weekly items like the Curry Set
 - [ ] Automate Microsoft session renewal
 
