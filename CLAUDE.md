@@ -80,6 +80,7 @@ There is no build step, linter, or test suite for this project. Workflows are im
 
 ## Important Constraints
 
+- **Never push to GitHub without asking first.** Always get explicit permission before running `git push` or any command that pushes to the remote repository.
 - **Session expiry**: The Microsoft SharePoint browser session stored in `SESSION_FILE` (default `/home/shayonised/menu-fetcher/session.json`) expires every few weeks. When it does, the scraper sends a Discord alert and the session must be manually renewed via `save-session.js`. See `docs/sharepoint-session-renewal.md` for the full procedure.
 - **Both campuses supported**: Uzumasa and Kameoka campuses are each processed by their own scraper workflow. The Kameoka menu uses a different layout (SET A/B, LIVE KITCHEN, CURRY A/B/C, RAMEN, SIDE DISH A/B/C/SALAD) and its scraper prompt reflects this. Both workflows insert into the same `menu_items` table differentiated by the `campus` column.
 - **Hardcoded paths**: `server.js` contains hardcoded paths (`SESSION_FILE`, `DOWNLOAD_DIR`, screenshot path) and a Discord webhook placeholder (`YOUR_DISCORD_WEBHOOK_URL`). These must be updated per deployment.
