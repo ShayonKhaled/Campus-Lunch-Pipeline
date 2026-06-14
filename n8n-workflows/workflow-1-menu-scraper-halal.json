@@ -1,0 +1,516 @@
+{
+	"name": "workflow-1-menu-scraper-halal",
+	"nodes": [
+		{
+			"parameters": {
+				"rule": {
+					"interval": [
+						{
+							"field": "weeks",
+							"triggerAtDay": [
+								6
+							],
+							"triggerAtHour": 11,
+							"triggerAtMinute": 15
+						}
+					]
+				}
+			},
+			"id": "b1d2e3f4-a001-4001-8001-000000000001",
+			"name": "Schedule Trigger",
+			"type": "n8n-nodes-base.scheduleTrigger",
+			"typeVersion": 1.1,
+			"position": [
+				-432,
+				-48
+			]
+		},
+		{
+			"parameters": {
+				"operation": "getAll",
+				"limit": 1,
+				"simple": false,
+				"filters": {
+					"q": "subject:レストランのランチメニューについて newer_than:14d"
+				},
+				"options": {}
+			},
+			"id": "b1d2e3f4-a002-4002-8002-000000000002",
+			"name": "Search Gmail",
+			"type": "n8n-nodes-base.gmail",
+			"typeVersion": 2,
+			"position": [
+				-224,
+				-48
+			],
+			"webhookId": "YOUR_WEBHOOK_ID",
+			"alwaysOutputData": true,
+			"credentials": {
+				"gmailOAuth2": {
+					"id": "YOUR_CREDENTIAL_ID",
+					"name": "Gmail account"
+				}
+			}
+		},
+		{
+			"parameters": {
+				"conditions": {
+					"options": {
+						"caseSensitive": true,
+						"leftValue": "",
+						"typeValidation": "strict",
+						"version": 1
+					},
+					"conditions": [
+						{
+							"id": "check-email-found",
+							"leftValue": "={{ $json.id }}",
+							"rightValue": "",
+							"operator": {
+								"type": "string",
+								"operation": "notEmpty"
+							}
+						}
+					],
+					"combinator": "and"
+				},
+				"options": {}
+			},
+			"id": "b1d2e3f4-a003-4003-8003-000000000003",
+			"name": "Email Found?",
+			"type": "n8n-nodes-base.if",
+			"typeVersion": 2,
+			"position": [
+				16,
+				-48
+			]
+		},
+		{
+			"parameters": {
+				"jsCode": "const htmlBody = $input.all()[0].json.html || '';\nif (!htmlBody) throw new Error('No HTML body found in email.');\n\nconst hrefPattern = /href=\"(https:\\/\\/kyotogakuen1-my\\.sharepoint\\.com[^\"]+)\"/gi;\nconst links = [];\nlet match;\nwhile ((match = hrefPattern.exec(htmlBody)) !== null) {\n  links.push({ url: match[1], index: match.index });\n}\n\nif (links.length === 0) {\n  throw new Error('No SharePoint links found.');\n}\n\n// Check surrounding context around each link to identify the Halal menu.\n// Prefer English keyword (\"Halal\") over Japanese (\"ハラル\") to get the English PDF.\nfunction getSurrounding(html, idx, before, after) {\n  var s = Math.max(0, idx - before);\n  var e = Math.min(html.length, idx + after);\n  return html.substring(s, e);\n}\n\n// Halal: prefer English keyword (\"Halal\"), fall back to Japanese (\"ハラル\")\nvar halalLink = null;\nfor (var pass = 0; pass < 2 && !halalLink; pass++) {\n  var keyword = pass === 0 ? 'Halal' : 'ハラル';\n  for (var i = 0; i < links.length && !halalLink; i++) {\n    var ctx = getSurrounding(htmlBody, links[i].index, 200, 100);\n    if (ctx.indexOf(keyword) !== -1) {\n      halalLink = links[i];\n    }\n  }\n}\n\nif (!halalLink) {\n  throw new Error('No Halal menu link found in email.');\n}\n\nreturn [\n  { pdfUrl: halalLink.url, campus: 'Uzumasa' },\n];"
+			},
+			"id": "b1d2e3f4-a004-4004-8004-000000000004",
+			"name": "Extract Halal PDF URL",
+			"type": "n8n-nodes-base.code",
+			"typeVersion": 2,
+			"position": [
+				224,
+				-128
+			]
+		},
+		{
+			"parameters": {
+				"method": "POST",
+				"url": "http://192.168.40.99:3456/fetch-pdf",
+				"sendBody": true,
+				"specifyBody": "json",
+				"jsonBody": "={ \"url\": \"{{ $json.pdfUrl }}\" }",
+				"options": {
+					"redirect": {
+						"redirect": {
+							"maxRedirects": 5
+						}
+					},
+					"response": {
+						"response": {
+							"neverError": true,
+							"responseFormat": "json"
+						}
+					}
+				}
+			},
+			"id": "b1d2e3f4-a005-4005-8005-000000000005",
+			"name": "Download PDF",
+			"type": "n8n-nodes-base.httpRequest",
+			"typeVersion": 4.2,
+			"position": [
+				448,
+				-128
+			]
+		},
+		{
+			"parameters": {
+				"mode": "runOnceForAllItems",
+				"jsCode": "const base64Pdf = $input.all()[0].json.base64Pdf;\nif (!base64Pdf) throw new Error('No PDF returned from fetcher VM');\n\nconst campus = $('Extract Halal PDF URL').all()[0].json.campus || 'Campus';\n\nconst now = new Date();\nconst weekOf = now.toISOString().slice(0, 10);\n\nreturn { base64Pdf, campus, weekOf };"
+			},
+			"id": "b1d2e3f4-a006-4006-8006-000000000006",
+			"name": "Prepare PDF for Claude",
+			"type": "n8n-nodes-base.code",
+			"typeVersion": 2,
+			"position": [
+				672,
+				-128
+			]
+		},
+		{
+			"parameters": {
+				"method": "POST",
+				"url": "https://api.anthropic.com/v1/messages",
+				"authentication": "genericCredentialType",
+				"genericAuthType": "httpHeaderAuth",
+				"sendHeaders": true,
+				"headerParameters": {
+					"parameters": [
+						{
+							"name": "anthropic-version",
+							"value": "2023-06-01"
+						},
+						{
+							"name": "anthropic-beta",
+							"value": "pdfs-2024-09-25"
+						}
+					]
+				},
+				"sendBody": true,
+				"specifyBody": "json",
+				"jsonBody": "={\n  \"model\": \"claude-sonnet-4-6\",\n  \"max_tokens\": 4096,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": [\n        {\n          \"type\": \"document\",\n          \"source\": {\n            \"type\": \"base64\",\n            \"media_type\": \"application/pdf\",\n            \"data\": \"{{ $json.base64Pdf }}\"\n          }\n        },\n        {\n          \"type\": \"text\",\n          \"text\": \"This is a halal lunch menu for Uzumasa Campus cafeteria. The menu lists meals available on Tuesdays and Thursdays.\\n\\nExtract every halal meal entry and return ONLY a JSON array, no markdown, no explanation.\\nEach object must have these fields:\\n- \\\"dish_name\\\": string\\n- \\\"day_name\\\": \\\"Tuesday\\\" or \\\"Thursday\\\"\\n- \\\"menu_date\\\": \\\"YYYY-MM-DD\\\" (infer from the month/year on the poster and the day names)\\n- If a dish name is obscured, crossed out, covered, or unreadable, skip that entry entirely — do not include it in the output.\\n- Remove the word \\\"Halal\\\" from the beginning of dish names if present, and ensure the first letter is capitalized.\\n- IMPORTANT: Ignore the date range shown in the title/header. Derive each item's date solely from the actual dates in the table rows themselves.\\n- CRITICAL — The current year is 2026. All menu_date values MUST use 2026 as the year, never 2024 or any other year. Verify every date before outputting.\\n\\nExample output:\\n[\\n  { \\\"dish_name\\\": \\\"Chicken Biryani\\\", \\\"day_name\\\": \\\"Tuesday\\\", \\\"menu_date\\\": \\\"2026-05-20\\\" },\\n  { \\\"dish_name\\\": \\\"Lamb Curry\\\", \\\"day_name\\\": \\\"Thursday\\\", \\\"menu_date\\\": \\\"2026-05-22\\\" }\\n]\\n\\nReturn only the JSON array.\"\n        }\n      ]\n    }\n  ]\n}",
+				"options": {}
+			},
+			"id": "b1d2e3f4-a007-4007-8007-000000000007",
+			"name": "Claude: Extract Halal Menu",
+			"type": "n8n-nodes-base.httpRequest",
+			"typeVersion": 4.2,
+			"position": [
+				896,
+				-128
+			],
+			"credentials": {
+				"httpHeaderAuth": {
+					"id": "YOUR_CREDENTIAL_ID",
+					"name": "Header Auth account"
+				}
+			}
+		},
+		{
+			"parameters": {
+				"jsCode": "const content = $input.all()[0].json.content;\n\nconst campus = $input.all()[0].json.campus || \n               $('Prepare PDF for Claude').all()[0].json.campus ||\n               'Unknown';\n\nconst textBlock = content.find(block => block.type === 'text');\nif (!textBlock) throw new Error('No text block in Claude response');\n\nconst rawText = textBlock.text;\n\n// Clean markdown fences if present\nconst cleaned = rawText.replace(/```json|```/g, '').trim();\n\nlet dishes;\ntry {\n  dishes = JSON.parse(cleaned);\n} catch(e) {\n  throw new Error('Parse failed: ' + e.message);\n}\n\nif (!Array.isArray(dishes)) {\n  throw new Error('Not an array');\n}\n\nconst weekOf = dishes[0]?.menu_date || new Date().toISOString().slice(0, 10);\n\nreturn dishes\n  .filter(dish => dish.dish_name && dish.dish_name.trim() !== '')\n  .map(dish => ({\n    campus,\n    week_of: weekOf.substring(0, 10),\n    day_name: dish.day_name || null,\n    menu_date: dish.menu_date ? dish.menu_date.substring(0, 10) : null,\n    category: 'Halal',\n    subcategory: 'Halal',\n    dish_name: dish.dish_name.trim(),\n    allergens: null,\n    calories: null,\n    protein: null,\n    fat: null,\n    sodium: null,\n    price: 400,\n  }));"
+			},
+			"id": "b1d2e3f4-a008-4008-8008-000000000008",
+			"name": "Claude Output Parser",
+			"type": "n8n-nodes-base.code",
+			"typeVersion": 2,
+			"position": [
+				1104,
+				-128
+			]
+		},
+		{
+			"parameters": {
+				"schema": {
+					"__rl": true,
+					"mode": "list",
+					"value": "public"
+				},
+				"table": {
+					"__rl": true,
+					"value": "menu_items",
+					"mode": "list",
+					"cachedResultName": "menu_items"
+				},
+				"columns": {
+					"mappingMode": "autoMapInputData",
+					"value": {
+						"id": 0,
+						"calories": 0,
+						"protein": 0,
+						"fat": 0,
+						"sodium": 0,
+						"price": 0
+					},
+					"matchingColumns": [
+						"id"
+					],
+					"schema": [
+						{
+							"id": "id",
+							"displayName": "id",
+							"required": false,
+							"defaultMatch": true,
+							"display": true,
+							"type": "number",
+							"canBeUsedToMatch": true,
+							"removed": false
+						},
+						{
+							"id": "campus",
+							"displayName": "campus",
+							"required": true,
+							"defaultMatch": false,
+							"display": true,
+							"type": "string",
+							"canBeUsedToMatch": true
+						},
+						{
+							"id": "week_of",
+							"displayName": "week_of",
+							"required": true,
+							"defaultMatch": false,
+							"display": true,
+							"type": "string",
+							"canBeUsedToMatch": true
+						},
+						{
+							"id": "day_name",
+							"displayName": "day_name",
+							"required": true,
+							"defaultMatch": false,
+							"display": true,
+							"type": "string",
+							"canBeUsedToMatch": true
+						},
+						{
+							"id": "menu_date",
+							"displayName": "menu_date",
+							"required": true,
+							"defaultMatch": false,
+							"display": true,
+							"type": "string",
+							"canBeUsedToMatch": true
+						},
+						{
+							"id": "category",
+							"displayName": "category",
+							"required": false,
+							"defaultMatch": false,
+							"display": true,
+							"type": "string",
+							"canBeUsedToMatch": true
+						},
+						{
+							"id": "dish_name",
+							"displayName": "dish_name",
+							"required": true,
+							"defaultMatch": false,
+							"display": true,
+							"type": "string",
+							"canBeUsedToMatch": true
+						},
+						{
+							"id": "allergens",
+							"displayName": "allergens",
+							"required": false,
+							"defaultMatch": false,
+							"display": true,
+							"type": "string",
+							"canBeUsedToMatch": true
+						},
+						{
+							"id": "calories",
+							"displayName": "calories",
+							"required": false,
+							"defaultMatch": false,
+							"display": true,
+							"type": "number",
+							"canBeUsedToMatch": true
+						},
+						{
+							"id": "protein",
+							"displayName": "protein",
+							"required": false,
+							"defaultMatch": false,
+							"display": true,
+							"type": "number",
+							"canBeUsedToMatch": true
+						},
+						{
+							"id": "fat",
+							"displayName": "fat",
+							"required": false,
+							"defaultMatch": false,
+							"display": true,
+							"type": "number",
+							"canBeUsedToMatch": true
+						},
+						{
+							"id": "sodium",
+							"displayName": "sodium",
+							"required": false,
+							"defaultMatch": false,
+							"display": true,
+							"type": "number",
+							"canBeUsedToMatch": true
+						},
+						{
+							"id": "created_at",
+							"displayName": "created_at",
+							"required": false,
+							"defaultMatch": false,
+							"display": true,
+							"type": "dateTime",
+							"canBeUsedToMatch": true
+						},
+						{
+							"id": "subcategory",
+							"displayName": "subcategory",
+							"required": false,
+							"defaultMatch": false,
+							"display": true,
+							"type": "string",
+							"canBeUsedToMatch": true
+						},
+						{
+							"id": "price",
+							"displayName": "price",
+							"required": false,
+							"defaultMatch": false,
+							"display": true,
+							"type": "number",
+							"canBeUsedToMatch": true
+						}
+					],
+					"attemptToConvertTypes": false,
+					"convertFieldsToString": false
+				},
+				"options": {}
+			},
+			"id": "b1d2e3f4-a009-4009-8009-000000000009",
+			"name": "Insert rows in a table",
+			"type": "n8n-nodes-base.postgres",
+			"typeVersion": 2.6,
+			"position": [
+				1312,
+				-128
+			],
+			"retryOnFail": true,
+			"credentials": {
+				"postgres": {
+					"id": "YOUR_CREDENTIAL_ID",
+					"name": "Postgres account"
+				}
+			},
+			"onError": "continueRegularOutput"
+		},
+		{
+			"parameters": {
+				"method": "=POST",
+				"url": "YOUR_DISCORD_WEBHOOK_URL",
+				"sendBody": true,
+				"specifyBody": "json",
+				"jsonBody": "={\n  \"content\": \"🚨 **System Alert** | <@722771046125797428>\\n**Service:** University Menu Bot (Halal)\\n**Status:** Failed to locate menu email\\n**Action Required:** Please verify the Gmail search query or check if the university has delayed the weekly update.\"\n}",
+				"options": {}
+			},
+			"id": "b1d2e3f4-a010-4010-8010-000000000010",
+			"name": "Notify: No Email Found",
+			"type": "n8n-nodes-base.httpRequest",
+			"typeVersion": 4.2,
+			"position": [
+				224,
+				80
+			]
+		}
+	],
+	"pinData": {},
+	"connections": {
+		"Schedule Trigger": {
+			"main": [
+				[
+					{
+						"node": "Search Gmail",
+						"type": "main",
+						"index": 0
+					}
+				]
+			]
+		},
+		"Search Gmail": {
+			"main": [
+				[
+					{
+						"node": "Email Found?",
+						"type": "main",
+						"index": 0
+					}
+				]
+			]
+		},
+		"Email Found?": {
+			"main": [
+				[
+					{
+						"node": "Extract Halal PDF URL",
+						"type": "main",
+						"index": 0
+					}
+				],
+				[
+					{
+						"node": "Notify: No Email Found",
+						"type": "main",
+						"index": 0
+					}
+				]
+			]
+		},
+		"Extract Halal PDF URL": {
+			"main": [
+				[
+					{
+						"node": "Download PDF",
+						"type": "main",
+						"index": 0
+					}
+				]
+			]
+		},
+		"Download PDF": {
+			"main": [
+				[
+					{
+						"node": "Prepare PDF for Claude",
+						"type": "main",
+						"index": 0
+					}
+				]
+			]
+		},
+		"Prepare PDF for Claude": {
+			"main": [
+				[
+					{
+						"node": "Claude: Extract Halal Menu",
+						"type": "main",
+						"index": 0
+					}
+				]
+			]
+		},
+		"Claude: Extract Halal Menu": {
+			"main": [
+				[
+					{
+						"node": "Claude Output Parser",
+						"type": "main",
+						"index": 0
+					}
+				]
+			]
+		},
+		"Claude Output Parser": {
+			"main": [
+				[
+					{
+						"node": "Insert rows in a table",
+						"type": "main",
+						"index": 0
+					}
+				]
+			]
+		}
+	},
+	"active": true,
+	"settings": {
+		"executionOrder": "v1",
+		"binaryMode": "separate",
+		"availableInMCP": false,
+		"timeSavedMode": "fixed",
+		"timezone": "Asia/Tokyo",
+		"callerPolicy": "workflowsFromSameOwner"
+	},
+	"versionId": "b1d2e3f4-b000-4000-8000-000000000000",
+	"meta": {
+		"templateCredsSetupCompleted": true,
+		"instanceId": "5b4a0ca6498fd61cba60c9657cf36de7506227ece441bf76eec1568c00adef6b"
+	},
+	"id": "RKjiJCD6UhNQ3ygQ",
+	"tags": []
+}
