@@ -330,16 +330,20 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://api.xiaomimimo.com/v1/chat/completions",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent",
+        "authentication": "none",
         "sendHeaders": true,
         "headerParameters": {
-          "parameters": []
+          "parameters": [
+            {
+              "name": "x-goog-api-key",
+              "value": "YOUR_GEMINI_API_KEY"
+            }
+          ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\\n  \"model\": \"mimo-v2.5\",\\n  \"max_tokens\": 8000,\\n  \"temperature\": 0,\\n  \"messages\": [\\n    {\\n      \"role\": \"user\",\\n      \"content\": {{ \\$json.content }}\\n    }\\n  ]\n}",
+        "jsonBody": "={\n  \"contents\": [\n    {\n      \"parts\": [\n        {\n          \"inlineData\": {\n            \"mimeType\": \"application/pdf\",\n            \"data\": \"{{ $json.base64Pdf }}\"\n          }\n        },\n        {\n          \"text\": \"Extract the complete weekly lunch menu from this PDF for Uzumasa campus.\\n\\nReturn ONLY a valid JSON array, no other text, no markdown, no backticks.\\n\\nThe menu has these exact sections and subcategories:\\n- category: 'Set Meals', subcategory: 'Campus Lunch (1)'\\n- category: 'Set Meals', subcategory: 'Campus Lunch (2)'\\n- category: 'A La Carte', subcategory: 'A La Carte'\\n- category: 'Noodles', subcategory: 'Ramen'\\n- category: 'Noodles', subcategory: 'Udon and Soba'\\n- category: 'Curry', subcategory: 'Curry'\\n- category: 'Sides', subcategory: 'Side Dish A'\\n- category: 'Sides', subcategory: 'Side Dish B'\\n- category: 'Sides', subcategory: 'Side Dish C'\\n- category: 'Sides', subcategory: 'Salad'\\n\\nEach item must have these exact fields:\\n{\\n  \\\"day_name\\\": \\\"Monday\\\",\\n  \\\"menu_date\\\": \\\"2026-05-11\\\",\\n  \\\"category\\\": \\\"Set Meals\\\",\\n  \\\"subcategory\\\": \\\"Campus Lunch (1)\\\",\\n  \\\"dish_name\\\": \\\"Hokkaido Corn Croquette and Whitefish Fry\\\",\\n  \\\"allergens\\\": \\\"Milk, Wheat, Shrimp\\\",\\n  \\\"calories\\\": 453,\\n  \\\"protein\\\": 14.8,\\n  \\\"fat\\\": 21.4,\\n  \\\"sodium\\\": 2.4\\n}\\n\\nRules:\\n- Include ALL days and ALL dishes\\n- Use null for any field not shown\\n- menu_date must be YYYY-MM-DD format\\n- CRITICAL \\u2014 The current year is 2026. All menu_date values MUST use 2026 as the year, never 2024 or any other year. Verify every date before outputting.\\n- For Udon and Soba, list each option as a separate item\\n- Return ONLY the JSON array, nothing else\"\n        }\n      ]\n    }\n  ]\n}",
         "options": {}
       },
       "id": "71d5a49c-c7e3-419b-a9a4-2f61c21da85a",
@@ -349,13 +353,7 @@
       "position": [
         896,
         -128
-      ],
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "Xk2l5n2ijUjwsMb3",
-          "name": "Xiaomi Mimo V2.5"
-        }
-      }
+      ]
     },
     {
       "parameters": {
@@ -372,7 +370,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const responseData = $input.all()[0].json;\n\n// OpenAI format: choices[0].message.content\nconst contentStr = responseData.choices?.[0]?.message?.content;\nif (!contentStr) throw new Error('No content in MiMo response');\n\nconst campus = $('Prepare MiMo Request').all()[0].json.campus || 'Uzumasa';\n\nlet rawText = contentStr.trim();\nlet dishes;\n\n// Try direct parse, then try extracting from markdown fences\ntry {\n  dishes = JSON.parse(rawText);\n} catch(e) {\n  const match = rawText.match(/```(?:json)?\\s*([\\s\\S]*?)```/);\n  if (match) {\n    rawText = match[1].trim();\n    dishes = JSON.parse(rawText);\n  } else {\n    throw new Error('Parse failed: ' + e.message + '\\nRaw: ' + rawText.slice(0, 200));\n  }\n}\n\nif (!Array.isArray(dishes)) throw new Error('Not an array');\n\nconst weekOf = dishes[0]?.menu_date || new Date().toISOString().slice(0, 10);\n\nreturn dishes\n  .filter(d => d.dish_name && d.dish_name.trim() !== '')\n  .map(d => ({\n    campus,\n    week_of: weekOf.slice(0, 10),\n    day_name: d.day_name || null,\n    menu_date: d.menu_date ? d.menu_date.slice(0, 10) : null,\n    category: d.category || null,\n    subcategory: d.subcategory || null,\n    dish_name: d.dish_name,\n    allergens: d.allergens || null,\n    calories: d.calories || null,\n    protein: d.protein || null,\n    fat: d.fat || null,\n    sodium: d.sodium || null,\n  }));\n"
+        "jsCode": "const responseData = $input.all()[0].json;\n\n// Gemini returns: candidates[0].content.parts[0].text\nconst parts = responseData.candidates?.[0]?.content?.parts;\nif (!parts || !parts[0]) throw new Error('No content in Gemini response');\n\nconst rawText = parts[0].text;\nif (!rawText) throw new Error('No text in Gemini response');\n\nconst campus = $('Prepare PDF for Extraction').all()[0].json.campus || 'Uzumasa';\n\nlet dishes;\ntry {\n  dishes = JSON.parse(rawText);\n} catch(e) {\n  const match = rawText.match(/```(?:json)?\\\\s*([\\\\s\\\\S]*?)```/);\n  if (match) {\n    dishes = JSON.parse(match[1].trim());\n  } else {\n    throw new Error('Parse failed: ' + e.message + '\\\\nRaw: ' + rawText.slice(0, 200));\n  }\n}\n\nif (!Array.isArray(dishes)) throw new Error('Not an array');\n\nconst weekOf = dishes[0]?.menu_date || new Date().toISOString().slice(0, 10);\n\nreturn dishes\n  .filter(d => d.dish_name && d.dish_name.trim() !== '')\n  .map(d => ({\n    campus,\n    week_of: weekOf.slice(0, 10),\n    day_name: d.day_name || null,\n    menu_date: d.menu_date ? d.menu_date.slice(0, 10) : null,\n    category: d.category || null,\n    subcategory: d.subcategory || null,\n    dish_name: d.dish_name,\n    allergens: d.allergens || null,\n    calories: d.calories || null,\n    protein: d.protein || null,\n    fat: d.fat || null,\n    sodium: d.sodium || null,\n  }));"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -382,43 +380,6 @@
       ],
       "id": "6d81a879-8f1d-41b7-90ff-305c8ccac1fb",
       "name": "Output Parser"
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "http://192.168.40.99:3456/fetch-pdf-images",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={ \"url\": \"{{ $('Extract PDF URL').all()[0].json.pdfUrl }}\" }",
-        "options": {
-          "response": {
-            "response": {
-              "responseFormat": "json"
-            }
-          }
-        }
-      },
-      "id": "fetch-imgs",
-      "name": "Fetch PDF Images",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        896,
-        -128
-      ]
-    },
-    {
-      "parameters": {
-        "jsCode": "const campus = \\$('Extract PDF URL').all()[0].json.campus || 'Uzumasa';\nconst images = \\$input.all()[0].json.images;\nif (!images || !Array.isArray(images) || images.length === 0) {\n  throw new Error('No images returned from PDF converter');\n}\n\nconst content = images.map(img => ({\n  type: 'image_url',\n  image_url: { url: img }\n}));\n\nconst prompt = [\n  'Extract the complete weekly lunch menu from these PDF images for Uzumasa campus.',\n  '',\n  'Return ONLY a valid JSON array, no other text, no markdown, no backticks.',\n  '',\n  \"The menu has these exact sections and subcategories:\",\n  \"- category: 'Set Meals', subcategory: 'Campus Lunch (1)'\",\n  \"- category: 'Set Meals', subcategory: 'Campus Lunch (2)'\",\n  \"- category: 'A La Carte', subcategory: 'A La Carte'\",\n  \"- category: 'Noodles', subcategory: 'Ramen'\",\n  \"- category: 'Noodles', subcategory: 'Udon and Soba'\",\n  \"- category: 'Curry', subcategory: 'Curry'\",\n  \"- category: 'Sides', subcategory: 'Side Dish A'\",\n  \"- category: 'Sides', subcategory: 'Side Dish B'\",\n  \"- category: 'Sides', subcategory: 'Side Dish C'\",\n  \"- category: 'Sides', subcategory: 'Salad'\",\n  '',\n  'Each item must have these exact fields:',\n  '{',\n  '  \"day_name\": \"Monday\",',\n  '  \"menu_date\": \"2026-05-11\",',\n  '  \"category\": \"Set Meals\",',\n  '  \"subcategory\": \"Campus Lunch (1)\",',\n  '  \"dish_name\": \"Hokkaido Corn Croquette and Whitefish Fry\",',\n  '  \"allergens\": \"Milk, Wheat, Shrimp\",',\n  '  \"calories\": 453,',\n  '  \"protein\": 14.8,',\n  '  \"fat\": 21.4,',\n  '  \"sodium\": 2.4',\n  '}',\n  '',\n  'Rules:',\n  '- Include ALL days and ALL dishes',\n  '- Use null for any field not shown',\n  '- menu_date must be YYYY-MM-DD format',\n  '- CRITICAL \u2014 The current year is 2026. All menu_date values MUST use 2026 as the year.',\n  '- For Udon and Soba, list each option as a separate item',\n  '- Return ONLY the JSON array, nothing else'\n].join('\\n');\n\ncontent.push({ type: 'text', text: prompt });\n\nconst weekOf = new Date().toISOString().slice(0, 10);\nreturn { content, campus, weekOf };"
-      },
-      "id": "mimo-prep2",
-      "name": "Prepare MiMo Request",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1104,
-        -128
-      ]
     }
   ],
   "connections": {
@@ -499,7 +460,7 @@
       "main": [
         [
           {
-            "node": "Fetch PDF Images",
+            "node": "Extract Menu",
             "type": "main",
             "index": 0
           }
@@ -511,28 +472,6 @@
         [
           {
             "node": "Insert rows in a table",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Fetch PDF Images": {
-      "main": [
-        [
-          {
-            "node": "Prepare MiMo Request",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Prepare MiMo Request": {
-      "main": [
-        [
-          {
-            "node": "Extract Menu",
             "type": "main",
             "index": 0
           }
