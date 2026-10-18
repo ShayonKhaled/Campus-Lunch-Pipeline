@@ -7,11 +7,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
  
 ## [Unreleased]
 ### Fixed
-- **Menu prices were never extracted.** The prompts told the model which fields to
-  return and that list had no `price`, so every row landed with `price = NULL`.
-  The Kameoka prompt asked for a price in its rules while omitting it from the
-  schema it was told to follow. `price` is now in every schema with an explicit
-  rule, and the Uzumasa output parser maps it (it did not before).
+- **Kameoka prices were never extracted.** The prompt listed the fields the model
+  must return and `price` was not among them, even though a rule further down
+  asked for one. The schema is what the model follows, so `dish.price` was always
+  undefined and every Kameoka row was stored with `price = NULL` — and Kameoka has
+  no fallback price table, so its menus posted without any figures. `price` is now
+  in the schema. Uzumasa is left alone: it has no scraped price by design and the
+  bot derives its prices from the campaign tiers.
 - **Rows could be stored under campus `Unknown`.** The Kameoka and Halal output
   parsers fell back to the literal `'Unknown'` when the campus reference was not
   available, which produces rows the bot cannot match to any subscriber. Each
