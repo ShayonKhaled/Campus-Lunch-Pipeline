@@ -54,6 +54,21 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
   saved Microsoft session was expired, which is why only guest links still
   worked.
 
+- **The Halal scraper had stopped storing anything.** Its poster covers a whole
+  month, so every run re-sent dates that were already stored. The insert node was
+  configured to match on `id`, Postgres raised the other constraint
+  (`unique_dish`), and the entire multi-row INSERT aborted — with the error
+  returned as item data, so the execution still reported success. All three
+  workflows now write through one `INSERT … ON CONFLICT` statement, packed into a
+  single base64 parameter (`Pack rows`), and each run first deletes the days in
+  its own payload — scoped to the campus (and, for Halal, to category `Halal`) —
+  so a re-parse cannot accumulate variants like "Chicken Curry" and "Chicken
+  Curry (with Salad)". That also cleaned 22 stale duplicate rows out of
+  `menu_items` (1950 → 1928).
+- Note on re-scrapes: a fresh parse can come back with `price = NULL` for a dish
+  it priced last time. The row keeps what was scraped; the bot still renders a
+  price from the last known one for that menu slot.
+
 ## [1.1.0] - 2026-06-14
 ### Added
 - Halal menu scraper workflow (`workflow-1-menu-scraper-halal`) for Uzumasa campus

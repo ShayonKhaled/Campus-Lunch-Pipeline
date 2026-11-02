@@ -30,7 +30,7 @@
 				"limit": 1,
 				"simple": false,
 				"filters": {
-					"q": "subject:\u30e9\u30f3\u30c1\u30e1\u30cb\u30e5\u30fc newer_than:14d"
+					"q": "subject:ランチメニュー newer_than:14d"
 				},
 				"options": {}
 			},
@@ -46,7 +46,7 @@
 			"alwaysOutputData": true,
 			"credentials": {
 				"gmailOAuth2": {
-					"id": "YOUR_CREDENTIAL_ID",
+					"id": "vvndsCRY1TbNldCG",
 					"name": "Gmail account"
 				}
 			}
@@ -86,7 +86,7 @@
 		},
 		{
 			"parameters": {
-				"jsCode": "const htmlBody = $input.all()[0].json.html || '';\nif (!htmlBody) throw new Error('No HTML body found in email.');\n\nconst hrefPattern = /href=\"(https:\\/\\/kyotogakuen1-my\\.sharepoint\\.com[^\"]+)\"/gi;\nconst links = [];\nlet match;\nwhile ((match = hrefPattern.exec(htmlBody)) !== null) {\n  links.push({ url: match[1], index: match.index });\n}\n\nif (links.length === 0) {\n  throw new Error('No SharePoint links found.');\n}\n\n// Check surrounding context around each link to identify campus\nfunction getSurrounding(html, idx, before, after) {\n  var s = Math.max(0, idx - before);\n  var e = Math.min(html.length, idx + after);\n  return html.substring(s, e);\n}\n\n// Kameoka: prefer English keyword (\"Kameoka\"), fall back to Japanese (\"亀岡\")\nvar kameokaLink = null;\nfor (var pass = 0; pass < 2 && !kameokaLink; pass++) {\n  var keyword = pass === 0 ? 'Kameoka' : '亀岡';\n  for (var i = 0; i < links.length && !kameokaLink; i++) {\n    var ctx = getSurrounding(htmlBody, links[i].index, 200, 100);\n    if (ctx.indexOf(keyword) !== -1) {\n      kameokaLink = links[i];\n    }\n  }\n}\n\nif (!kameokaLink) {\n  throw new Error('No Kameoka campus link found in email.');\n}\n\nreturn [\n  { pdfUrl: kameokaLink.url, campus: 'Kameoka' },\n];"
+				"jsCode": "const htmlBody = $input.all()[0].json.html || '';\nif (!htmlBody) throw new Error('No HTML body found in email.');\n\nconst hrefPattern = /href=\"(https:\\/\\/kyotogakuen1-my\\.sharepoint\\.com[^\"]+)\"/gi;\nconst links = [];\nlet match;\nwhile ((match = hrefPattern.exec(htmlBody)) !== null) {\n  links.push({ url: match[1], index: match.index });\n}\n\nif (links.length === 0) {\n  throw new Error('No SharePoint links found.');\n}\n\n// Check surrounding context around each link to identify campus\nfunction getSurrounding(html, idx, before, after) {\n  var s = Math.max(0, idx - before);\n  var e = Math.min(html.length, idx + after);\n  return html.substring(s, e);\n}\n\n// Kameoka: prefer English keyword (\"Kameoka\"), fall back to Japanese (\"亀岡\")\nvar kameokaLink = null;\nfor (var pass = 0; pass < 2 && !kameokaLink; pass++) {\n  var keyword = pass === 0 ? 'Kameoka' : '亀岡';\n  for (var i = 0; i < links.length && !kameokaLink; i++) {\n    var ctx = getSurrounding(htmlBody, links[i].index, 200, 100);\n    if (ctx.indexOf(keyword) !== -1) {\n      kameokaLink = links[i];\n    }\n  }\n}\n\nif (!kameokaLink) {\n  throw new Error('No Kameoka campus link found in email.');\n}\n\n// SharePoint hands the weekly menus out as viewer links\n// (\":b:/r/…/onedrive.aspx?id=…\"), and \"?download=1\" on those returns the\n// OneDrive page instead of the file. download.aspx with the server-relative path\n// is the endpoint that actually serves the PDF, so hand the fetcher that. Guest\n// links (\":b:/g/…\", used for the Halal menus) are left exactly as they are.\nfunction toDownloadUrl(u) {\n  // n8n's Code sandbox has no URL/URLSearchParams, so parse by hand: a viewer\n  // link's own \"id\" query parameter is the server-relative path of the file.\n  var m = u.match(/^https:\\/\\/([^/]+)\\/(?:.*\\/)?personal\\/([^/]+)\\/.+?[?&]id=([^&]+)/i);\n  if (!m) return u;\n  return 'https://' + m[1] + '/personal/' + m[2] +\n    '/_layouts/15/download.aspx?SourceUrl=' + encodeURIComponent(decodeURIComponent(m[3]));\n}\n\nreturn [\n  { pdfUrl: toDownloadUrl(kameokaLink.url), campus: 'Kameoka' },\n];"
 			},
 			"id": "aeb3702d-5499-496b-a0e4-92e0501e0e6a",
 			"name": "Extract PDF URL",
@@ -129,7 +129,6 @@
 		},
 		{
 			"parameters": {
-				"mode": "runOnceForAllItems",
 				"jsCode": "const base64Pdf = $input.all()[0].json.base64Pdf;\nif (!base64Pdf) throw new Error('No PDF returned from fetcher VM');\n\nconst campus = $('Extract PDF URL').all()[0].json.campus || 'Campus';\n\nconst now = new Date();\nconst weekOf = now.toISOString().slice(0, 10);\n\nreturn { base64Pdf, campus, weekOf };"
 			},
 			"id": "3b10a790-ec3f-4038-8f93-14cc706552d7",
@@ -144,39 +143,33 @@
 		{
 			"parameters": {
 				"method": "POST",
-				"url": "https://api.anthropic.com/v1/messages",
+				"url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent",
 				"authentication": "genericCredentialType",
 				"genericAuthType": "httpHeaderAuth",
 				"sendHeaders": true,
 				"headerParameters": {
-					"parameters": [
-						{
-							"name": "anthropic-version",
-							"value": "2023-06-01"
-						},
-						{
-							"name": "anthropic-beta",
-							"value": "pdfs-2024-09-25"
-						}
-					]
+					"parameters": []
 				},
 				"sendBody": true,
 				"specifyBody": "json",
-				"jsonBody": "={\n  \"model\": \"claude-sonnet-4-6\",\n  \"max_tokens\": 8000,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": [\n        {\n          \"type\": \"document\",\n          \"source\": {\n            \"type\": \"base64\",\n            \"media_type\": \"application/pdf\",\n            \"data\": \"{{ $json.base64Pdf }}\"\n          }\n        },\n        {\n          \"type\": \"text\",\n          \"text\": \"Extract the complete weekly lunch menu from this PDF for Kameoka campus.\\n\\nReturn ONLY a valid JSON array, no other text, no markdown, no backticks.\\n\\nThe menu has these exact sections and subcategories:\\n- category: 'Set', subcategory: 'A'\\n- category: 'Set', subcategory: 'B'\\n- category: 'Live Kitchen', subcategory: 'Live Kitchen'\\n- category: 'Curry', subcategory: 'A'\\n- category: 'Curry', subcategory: 'B'\\n- category: 'Curry', subcategory: 'C'\\n- category: 'Ramen', subcategory: 'Ramen'\\n- category: 'Side Dish', subcategory: 'A'\\n- category: 'Side Dish', subcategory: 'B'\\n- category: 'Side Dish', subcategory: 'C'\\n- category: 'Side Dish', subcategory: 'Salad'\\n\\nEach item must have these exact fields:\\n{\\n  \\\"day_name\\\": \\\"Monday\\\",\\n  \\\"menu_date\\\": \\\"2026-06-01\\\",\\n  \\\"category\\\": \\\"SET\\\",\\n  \\\"subcategory\\\": \\\"A\\\",\\n  \\\"dish_name\\\": \\\"Teppan Panko Pork Loin with BBQ Sauce\\\",\\n  \\\"allergens\\\": \\\"Milk, Wheat\\\",\\n  \\\"calories\\\": 453,\\n  \\\"protein\\\": 14.8,\\n  \\\"fat\\\": 21.4,\\n  \\\"sodium\\\": 2.4,\\n  \\\"price\\\": 500\\n}\\n\\nRules:\\n- Include ALL days (Monday through Friday) and ALL dishes\\n- Use null for any field not shown\\n- menu_date must be YYYY-MM-DD format\\n- CRITICAL — The current year is 2026. All menu_date values MUST use 2026 as the year, never 2024 or any other year. Verify every date before outputting.\\n- The Live Kitchen section has a single entry per day; use subcategory 'Live Kitchen'\\n- Extract the price in yen as an integer (e.g., 500). Use null if no price is shown.\\n- Return ONLY the JSON array, nothing else\"\n        }\n      ]\n    }\n  ]\n}",
+				"jsonBody": "={\n  \"contents\": [\n    {\n      \"parts\": [\n        {\n          \"inlineData\": {\n            \"mimeType\": \"application/pdf\",\n            \"data\": \"{{ $json.base64Pdf }}\"\n          }\n        },\n        {\n          \"text\": \"Extract the complete weekly lunch menu from this PDF for Kameoka campus.\\n\\nReturn ONLY a valid JSON array, no other text, no markdown, no backticks.\\n\\nThe menu has these exact sections and subcategories:\\n- category: 'Set', subcategory: 'A'\\n- category: 'Set', subcategory: 'B'\\n- category: 'Live Kitchen', subcategory: 'Live Kitchen'\\n- category: 'Curry', subcategory: 'A'\\n- category: 'Curry', subcategory: 'B'\\n- category: 'Curry', subcategory: 'C'\\n- category: 'Ramen', subcategory: 'Ramen'\\n- category: 'Side Dish', subcategory: 'A'\\n- category: 'Side Dish', subcategory: 'B'\\n- category: 'Side Dish', subcategory: 'C'\\n- category: 'Side Dish', subcategory: 'Salad'\\n\\nEach item must have these exact fields:\\n{\\n  \\\"day_name\\\": \\\"Monday\\\",\\n  \\\"menu_date\\\": \\\"2026-06-01\\\",\\n  \\\"category\\\": \\\"SET\\\",\\n  \\\"subcategory\\\": \\\"A\\\",\\n  \\\"dish_name\\\": \\\"Teppan Panko Pork Loin with BBQ Sauce\\\",\\n  \\\"price\\\": 500,\\n  \\\"allergens\\\": \\\"Milk, Wheat\\\",\\n  \\\"calories\\\": 453,\\n  \\\"protein\\\": 14.8,\\n  \\\"fat\\\": 21.4,\\n  \\\"sodium\\\": 2.4\\n}\\n\\nRules:\\n- Include ALL days (Monday through Friday) and ALL dishes\\n- Use null for any field not shown\\n- menu_date must be YYYY-MM-DD format\\n- CRITICAL — The current year is 2026. All menu_date values MUST use 2026 as the year, never 2024 or any other year. Verify every date before outputting.\\n- The Live Kitchen section has a single entry per day; use subcategory 'Live Kitchen'\\n- Extract the price in yen as an integer (e.g., 500). Use null if no price is shown.\\n- Return ONLY the JSON array, nothing else\"\n        }\n      ]\n    }\n  ]\n}",
 				"options": {}
 			},
 			"id": "71d5a49c-c7e3-419b-a9a4-2f61c21da85a",
-			"name": "Claude: Extract Menu",
+			"name": "Extract Menu (Gemini)",
 			"type": "n8n-nodes-base.httpRequest",
 			"typeVersion": 4.2,
 			"position": [
 				896,
 				-128
 			],
+			"retryOnFail": false,
+			"waitBetweenTries": 5000,
+			"maxTries": 5,
 			"credentials": {
 				"httpHeaderAuth": {
-					"id": "YOUR_CREDENTIAL_ID",
-					"name": "Header Auth account"
+					"id": "0AvpPIBErXdxpsms",
+					"name": "Gemini API Key"
 				}
 			}
 		},
@@ -200,7 +193,7 @@
 		},
 		{
 			"parameters": {
-				"jsCode": "const content = $input.all()[0].json.content;\n\n// Get campus from the current input item's chain\n// The Claude node receives campus via Prepare PDF node\n// This workflow only ever scrapes one campus, so the campus is a\n// constant. It used to fall back to 'Unknown', which wrote rows the bot\n// cannot match to any subscriber and showed up as a missing menu.\nconst campus = 'Kameoka';\n\nconst textBlock = content.find(block => block.type === 'text');\nif (!textBlock) throw new Error('No text block in Claude response');\n\nconst rawText = textBlock.text;\n\nlet dishes;\ntry {\n  dishes = JSON.parse(rawText);\n} catch(e) {\n  throw new Error('Parse failed: ' + e.message);\n}\n\nif (!Array.isArray(dishes)) {\n  throw new Error('Not an array');\n}\n\n// Staleness guard. On 2026-10-31 the subject line gained a campaign clause, the\n// Gmail search fell back to the previous week's email, and this workflow\n// re-wrote 2026-10-26..30 (as campus 'Unknown') while the week it was meant to\n// scrape was never stored - the bot had nothing to post on 2026-11-02. A weekly\n// menu is for the current or next week; anything older is a wrong email, so fail\n// loudly instead of writing it again.\nvar menuDates = dishes\n  .map(function (d) { return d.menu_date ? String(d.menu_date).slice(0, 10) : null; })\n  .filter(Boolean)\n  .sort();\nvar newestDate = menuDates[menuDates.length - 1];\nif (newestDate) {\n  var now = new Date();\n  var day = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());\n  var earliest = day - 1 * 86400000;\n  var latest = day + 14 * 86400000;\n  var newest = new Date(newestDate + 'T00:00:00Z').getTime();\n  if (newest < earliest || newest > latest) {\n    throw new Error(\n      'Stale scrape: newest menu_date is ' + newestDate + ', expected ' +\n      new Date(earliest).toISOString().slice(0, 10) + '..' +\n      new Date(latest).toISOString().slice(0, 10) +\n      '. The Gmail search matched an old email - check the subject filter in \"Search Gmail\" against this week\\'s subject line.'\n    );\n  }\n}\n\nconst weekOf = dishes[0]?.menu_date || new Date().toISOString().slice(0, 10);\n\nreturn dishes\n  .filter(dish => dish.dish_name && dish.dish_name.trim() !== '')\n  .map(dish => {\n    var s = dish.category || '';\n    var cat = s ? s.split(' ').map(function(w) { return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase(); }).join(' ') : null;\n    s = dish.subcategory || '';\n    var sub = s ? s.split(' ').map(function(w) { return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase(); }).join(' ') : null;\n    return {\n      campus: campus,\n      week_of: weekOf.substring(0, 10),\n      day_name: dish.day_name || null,\n      menu_date: dish.menu_date ? dish.menu_date.substring(0, 10) : null,\n      category: cat,\n      subcategory: sub,\n      dish_name: dish.dish_name,\n      allergens: dish.allergens || null,\n      calories: dish.calories || null,\n      protein: dish.protein || null,\n      fat: dish.fat || null,\n      sodium: dish.sodium || null,\n      price: dish.price || null\n    };\n  });"
+				"jsCode": "const responseData = $input.all()[0].json;\n\n// Gemini returns: candidates[0].content.parts[0].text\nconst parts = responseData.candidates?.[0]?.content?.parts;\nif (!parts || !parts[0]) throw new Error('No content in Gemini response');\n\nconst rawText = parts[0].text;\nif (!rawText) throw new Error('No text in Gemini response');\n\nconst campus = $('Prepare PDF for Claude').all()[0].json.campus || 'Kameoka';\n\nlet dishes;\ntry {\n  dishes = JSON.parse(rawText);\n} catch(e) {\n  const match = rawText.match(/```(?:json)?\\s*([\\s\\S]*?)```/);\n  if (match) {\n    dishes = JSON.parse(match[1].trim());\n  } else {\n    throw new Error('Parse failed: ' + e.message + '\\\\nRaw: ' + rawText.slice(0, 200));\n  }\n}\n\nif (!Array.isArray(dishes)) throw new Error('Not an array');\n\n// Staleness guard. On 2026-10-31 the subject line gained a campaign clause, the\n// Gmail search fell back to the previous week's email, and this workflow\n// re-wrote 2026-10-26..30 (as campus 'Unknown') while the week it was meant to\n// scrape was never stored - the bot had nothing to post on 2026-11-02. A weekly\n// menu is for the current or next week; anything older is a wrong email, so fail\n// loudly instead of writing it again.\nvar menuDates = dishes\n  .map(function (d) { return d.menu_date ? String(d.menu_date).slice(0, 10) : null; })\n  .filter(Boolean)\n  .sort();\nvar newestDate = menuDates[menuDates.length - 1];\nif (newestDate) {\n  var now = new Date();\n  var day = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());\n  var earliest = day - 1 * 86400000;\n  var latest = day + 14 * 86400000;\n  var newest = new Date(newestDate + 'T00:00:00Z').getTime();\n  if (newest < earliest || newest > latest) {\n    throw new Error(\n      'Stale scrape: newest menu_date is ' + newestDate + ', expected ' +\n      new Date(earliest).toISOString().slice(0, 10) + '..' +\n      new Date(latest).toISOString().slice(0, 10) +\n      '. The Gmail search matched an old email - check the subject filter in \"Search Gmail\" against this week\\'s subject line.'\n    );\n  }\n}\n\nconst weekOf = dishes[0]?.menu_date || new Date().toISOString().slice(0, 10);\n\nreturn dishes\n  .filter(d => d.dish_name && d.dish_name.trim() !== '')\n  .map(d => ({\n    campus,\n    week_of: weekOf.slice(0, 10),\n    day_name: d.day_name || null,\n    menu_date: d.menu_date ? d.menu_date.slice(0, 10) : null,\n    category: d.category || null,\n    subcategory: d.subcategory || null,\n    dish_name: d.dish_name,\n    price: d.price ?? null,\n    allergens: d.allergens || null,\n    calories: d.calories || null,\n    protein: d.protein || null,\n    fat: d.fat || null,\n    sodium: d.sodium || null,\n  }));"
 			},
 			"type": "n8n-nodes-base.code",
 			"typeVersion": 2,
@@ -213,171 +206,11 @@
 		},
 		{
 			"parameters": {
-				"schema": {
-					"__rl": true,
-					"mode": "list",
-					"value": "public"
-				},
-				"table": {
-					"__rl": true,
-					"value": "menu_items",
-					"mode": "list",
-					"cachedResultName": "menu_items"
-				},
-				"columns": {
-					"mappingMode": "autoMapInputData",
-					"value": {
-						"id": 0,
-						"calories": 0,
-						"protein": 0,
-						"fat": 0,
-						"sodium": 0
-					},
-					"matchingColumns": [
-						"id"
-					],
-					"schema": [
-						{
-							"id": "id",
-							"displayName": "id",
-							"required": false,
-							"defaultMatch": true,
-							"display": true,
-							"type": "number",
-							"canBeUsedToMatch": true,
-							"removed": false
-						},
-						{
-							"id": "campus",
-							"displayName": "campus",
-							"required": true,
-							"defaultMatch": false,
-							"display": true,
-							"type": "string",
-							"canBeUsedToMatch": true
-						},
-						{
-							"id": "week_of",
-							"displayName": "week_of",
-							"required": true,
-							"defaultMatch": false,
-							"display": true,
-							"type": "string",
-							"canBeUsedToMatch": true
-						},
-						{
-							"id": "day_name",
-							"displayName": "day_name",
-							"required": true,
-							"defaultMatch": false,
-							"display": true,
-							"type": "string",
-							"canBeUsedToMatch": true
-						},
-						{
-							"id": "menu_date",
-							"displayName": "menu_date",
-							"required": true,
-							"defaultMatch": false,
-							"display": true,
-							"type": "string",
-							"canBeUsedToMatch": true
-						},
-						{
-							"id": "category",
-							"displayName": "category",
-							"required": false,
-							"defaultMatch": false,
-							"display": true,
-							"type": "string",
-							"canBeUsedToMatch": true
-						},
-						{
-							"id": "dish_name",
-							"displayName": "dish_name",
-							"required": true,
-							"defaultMatch": false,
-							"display": true,
-							"type": "string",
-							"canBeUsedToMatch": true
-						},
-						{
-							"id": "allergens",
-							"displayName": "allergens",
-							"required": false,
-							"defaultMatch": false,
-							"display": true,
-							"type": "string",
-							"canBeUsedToMatch": true
-						},
-						{
-							"id": "calories",
-							"displayName": "calories",
-							"required": false,
-							"defaultMatch": false,
-							"display": true,
-							"type": "number",
-							"canBeUsedToMatch": true
-						},
-						{
-							"id": "protein",
-							"displayName": "protein",
-							"required": false,
-							"defaultMatch": false,
-							"display": true,
-							"type": "number",
-							"canBeUsedToMatch": true
-						},
-						{
-							"id": "fat",
-							"displayName": "fat",
-							"required": false,
-							"defaultMatch": false,
-							"display": true,
-							"type": "number",
-							"canBeUsedToMatch": true
-						},
-						{
-							"id": "sodium",
-							"displayName": "sodium",
-							"required": false,
-							"defaultMatch": false,
-							"display": true,
-							"type": "number",
-							"canBeUsedToMatch": true
-						},
-						{
-							"id": "created_at",
-							"displayName": "created_at",
-							"required": false,
-							"defaultMatch": false,
-							"display": true,
-							"type": "dateTime",
-							"canBeUsedToMatch": true
-						},
-						{
-							"id": "subcategory",
-							"displayName": "subcategory",
-							"required": false,
-							"defaultMatch": false,
-							"display": true,
-							"type": "string",
-							"canBeUsedToMatch": true
-						},
-						{
-							"id": "price",
-							"displayName": "price",
-							"required": false,
-							"defaultMatch": false,
-							"display": true,
-							"type": "number",
-							"canBeUsedToMatch": true
-						}
-					],
-					"attemptToConvertTypes": false,
-					"convertFieldsToString": false
-				},
-				"options": {}
+				"operation": "executeQuery",
+				"query": "WITH src AS (\n  SELECT * FROM jsonb_to_recordset(convert_from(decode($1, 'base64'), 'UTF8')::jsonb)\n    AS x(campus text, week_of text, day_name text, menu_date text, category text, subcategory text,\n         dish_name text, allergens text, calories integer, protein numeric, fat numeric, sodium numeric)\n), del AS (\n  DELETE FROM menu_items\n   WHERE campus = 'Kameoka'\n     AND menu_date IN (SELECT DISTINCT menu_date FROM src)\n)\nINSERT INTO menu_items\n  (campus, week_of, day_name, menu_date, category, subcategory, dish_name, allergens, calories, protein, fat, sodium)\nSELECT campus, week_of, day_name, menu_date, category, subcategory, dish_name, allergens, calories, protein, fat, sodium\n  FROM src\nON CONFLICT (campus, menu_date, dish_name, subcategory) DO UPDATE SET\n  week_of   = EXCLUDED.week_of,\n  day_name  = EXCLUDED.day_name,\n  category  = EXCLUDED.category,\n  allergens = EXCLUDED.allergens,\n  calories  = EXCLUDED.calories,\n  protein   = EXCLUDED.protein,\n  fat       = EXCLUDED.fat,\n  sodium    = EXCLUDED.sodium",
+				"options": {
+					"queryReplacement": "={{ $json.rows_b64 }}"
+				}
 			},
 			"type": "n8n-nodes-base.postgres",
 			"typeVersion": 2.6,
@@ -390,11 +223,25 @@
 			"retryOnFail": true,
 			"credentials": {
 				"postgres": {
-					"id": "YOUR_CREDENTIAL_ID",
+					"id": "lQtOsRtHK1YErWfA",
 					"name": "Postgres account"
 				}
 			},
 			"onError": "continueRegularOutput"
+		},
+		{
+			"parameters": {
+				"mode": "runOnceForAllItems",
+				"jsCode": "// Pack every parsed row into one base64 blob for a single INSERT ... ON CONFLICT.\n// Postgres raises a unique violation for *any* duplicate key in a multi-row\n// INSERT, and the Halal poster repeats a whole month every run, so one row that\n// already exists used to abort the entire batch and nothing new was ever stored.\nconst rows = $input\n  .all()\n  .map((item) => item.json)\n  .filter((r) => r.dish_name && r.menu_date);\n\nreturn [{ json: { rows_b64: Buffer.from(JSON.stringify(rows), 'utf8').toString('base64'), rows: rows.length } }];"
+			},
+			"id": "pack-rows-1793633856296",
+			"name": "Pack rows",
+			"type": "n8n-nodes-base.code",
+			"typeVersion": 2,
+			"position": [
+				1112,
+				-128
+			]
 		}
 	],
 	"pinData": {},
@@ -465,14 +312,25 @@
 			"main": [
 				[
 					{
-						"node": "Claude: Extract Menu",
+						"node": "Extract Menu (Gemini)",
 						"type": "main",
 						"index": 0
 					}
 				]
 			]
 		},
-		"Claude: Extract Menu": {
+		"Claude Output Parser": {
+			"main": [
+				[
+					{
+						"node": "Pack rows",
+						"type": "main",
+						"index": 0
+					}
+				]
+			]
+		},
+		"Extract Menu (Gemini)": {
 			"main": [
 				[
 					{
@@ -483,7 +341,7 @@
 				]
 			]
 		},
-		"Claude Output Parser": {
+		"Pack rows": {
 			"main": [
 				[
 					{
@@ -498,17 +356,12 @@
 	"active": true,
 	"settings": {
 		"executionOrder": "v1",
-		"binaryMode": "separate",
-		"availableInMCP": false,
-		"timeSavedMode": "fixed",
 		"timezone": "Asia/Tokyo",
-		"callerPolicy": "workflowsFromSameOwner"
+		"callerPolicy": "workflowsFromSameOwner",
+		"availableInMCP": false
 	},
-	"versionId": "c13a8df4-613d-4bb6-b390-c102ba7bc1e5",
-	"meta": {
-		"templateCredsSetupCompleted": true,
-		"instanceId": "5b4a0ca6498fd61cba60c9657cf36de7506227ece441bf76eec1568c00adef6b"
-	},
-	"id": "Xwsf0dr5hQ6rvihs",
+	"versionId": "521e4a61-390d-462a-8b7f-8f5dabf369a1",
+	"meta": null,
+	"id": "3kAgq2d8X3whf5TZ",
 	"tags": []
 }

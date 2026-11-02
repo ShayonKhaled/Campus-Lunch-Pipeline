@@ -79,35 +79,42 @@ app.post('/fetch-pdf', async (req, res) => {
     const cookies = await context.cookies();
     const authenticated = cookies.some((c) => /^(FedAuth|rtFa|SPOIDCRL)/i.test(c.name));
 
-    // Check session
-    if (!authenticated || page.url().includes('login.microsoftonline.com')) {
-      await browser.close();
-
-    await fetch('https://YOUR_DISCORD_WEBHOOK_URL', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ 
-      content: '🔴 **Menu Bot Alert** — Microsoft session expired!\nRun `node save-session.js` on the Debian VM to fix.' 
-    })
-  });
-      return res.status(401).json({ error: 'Session expired. Re-run save-session.js.' });
-    }
-
     await page.screenshot({ path: DOWNLOAD_DIR + '/../debug.png' });
 
     // Use page.evaluate to fetch the PDF as base64 using the browser's authenticated fetch
     const downloadUrl = toDownloadUrl(url);
-    const base64Pdf = await page.evaluate(async (target) => {
-      const response = await fetch(target, { credentials: 'include' });
-      if (!response.ok) throw new Error('Fetch failed: ' + response.status);
-      const buffer = await response.arrayBuffer();
-      const bytes = new Uint8Array(buffer);
-      let binary = '';
-      for (let i = 0; i < bytes.byteLength; i++) {
-        binary += String.fromCharCode(bytes[i]);
+    let base64Pdf;
+    try {
+      base64Pdf = await page.evaluate(async (target) => {
+        const response = await fetch(target, { credentials: 'include' });
+        if (!response.ok) throw new Error('Fetch failed: ' + response.status);
+        const buffer = await response.arrayBuffer();
+        const bytes = new Uint8Array(buffer);
+        let binary = '';
+        for (let i = 0; i < bytes.byteLength; i++) {
+          binary += String.fromCharCode(bytes[i]);
+        }
+        return btoa(binary);
+      }, downloadUrl);
+    } catch (err) {
+      // Only now is an expired session the likely story. Guest links (the Halal
+      // menus, ":b:/g/…") download anonymously and must keep working even when
+      // the saved sign-in has lapsed, so the cookie is a diagnosis here, not a
+      // gate.
+      await browser.close();
+      if (!authenticated) {
+        await fetch('https://YOUR_DISCORD_WEBHOOK_URL', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            content:
+              '🔴 **Menu Bot Alert** — Microsoft session expired!\nRun `node save-session.js` on the Debian VM to fix.',
+          }),
+        }).catch(() => {});
+        return res.status(401).json({ error: `Session expired. Re-run save-session.js. (${err.message.split('\n')[0]})` });
       }
-      return btoa(binary);
-    }, downloadUrl);
+      throw err;
+    }
 
     await browser.close();
 

@@ -31,7 +31,7 @@
 				"limit": 1,
 				"simple": false,
 				"filters": {
-					"q": "subject:\u30e9\u30f3\u30c1\u30e1\u30cb\u30e5\u30fc newer_than:14d"
+					"q": "subject:ランチメニュー newer_than:14d"
 				},
 				"options": {}
 			},
@@ -47,7 +47,7 @@
 			"alwaysOutputData": true,
 			"credentials": {
 				"gmailOAuth2": {
-					"id": "YOUR_CREDENTIAL_ID",
+					"id": "vvndsCRY1TbNldCG",
 					"name": "Gmail account"
 				}
 			}
@@ -130,8 +130,7 @@
 		},
 		{
 			"parameters": {
-				"mode": "runOnceForAllItems",
-				"jsCode": "const base64Pdf = $input.all()[0].json.base64Pdf;\nif (!base64Pdf) throw new Error('No PDF returned from fetcher VM');\n\nconst campus = $('Extract Halal PDF URL').all()[0].json.campus || 'Campus';\n\nconst now = new Date();\nconst weekOf = now.toISOString().slice(0, 10);\n\nreturn { base64Pdf, campus, weekOf };"
+				"jsCode": "const base64Pdf = $input.all()[0].json.base64Pdf;\nif (!base64Pdf) throw new Error('No PDF returned from fetcher VM');\nconst campus = 'Uzumasa';\nconst now = new Date();\nconst weekOf = now.toISOString().slice(0, 10);\nreturn { base64Pdf, campus, weekOf };"
 			},
 			"id": "b1d2e3f4-a006-4006-8006-000000000006",
 			"name": "Prepare PDF for Claude",
@@ -145,29 +144,20 @@
 		{
 			"parameters": {
 				"method": "POST",
-				"url": "https://api.anthropic.com/v1/messages",
+				"url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent",
 				"authentication": "genericCredentialType",
 				"genericAuthType": "httpHeaderAuth",
 				"sendHeaders": true,
 				"headerParameters": {
-					"parameters": [
-						{
-							"name": "anthropic-version",
-							"value": "2023-06-01"
-						},
-						{
-							"name": "anthropic-beta",
-							"value": "pdfs-2024-09-25"
-						}
-					]
+					"parameters": []
 				},
 				"sendBody": true,
 				"specifyBody": "json",
-				"jsonBody": "={\n  \"model\": \"claude-sonnet-4-6\",\n  \"max_tokens\": 4096,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": [\n        {\n          \"type\": \"document\",\n          \"source\": {\n            \"type\": \"base64\",\n            \"media_type\": \"application/pdf\",\n            \"data\": \"{{ $json.base64Pdf }}\"\n          }\n        },\n        {\n          \"type\": \"text\",\n          \"text\": \"This is a halal lunch menu for Uzumasa Campus cafeteria. The menu lists meals available on Tuesdays and Thursdays.\\n\\nExtract every halal meal entry and return ONLY a JSON array, no markdown, no explanation.\\nEach object must have these fields:\\n- \\\"dish_name\\\": string\\n- \\\"day_name\\\": \\\"Tuesday\\\" or \\\"Thursday\\\"\\n- \\\"menu_date\\\": \\\"YYYY-MM-DD\\\" (infer from the month/year on the poster and the day names)\\n- If a dish name is obscured, crossed out, covered, or unreadable, skip that entry entirely — do not include it in the output.\\n- Remove the word \\\"Halal\\\" from the beginning of dish names if present, and ensure the first letter is capitalized.\\n- IMPORTANT: Ignore the date range shown in the title/header. Derive each item's date solely from the actual dates in the table rows themselves.\\n- CRITICAL — The current year is 2026. All menu_date values MUST use 2026 as the year, never 2024 or any other year. Verify every date before outputting.\\n\\nExample output:\\n[\\n  { \\\"dish_name\\\": \\\"Chicken Biryani\\\", \\\"day_name\\\": \\\"Tuesday\\\", \\\"menu_date\\\": \\\"2026-05-20\\\" },\\n  { \\\"dish_name\\\": \\\"Lamb Curry\\\", \\\"day_name\\\": \\\"Thursday\\\", \\\"menu_date\\\": \\\"2026-05-22\\\" }\\n]\\n\\nReturn only the JSON array.\"\n        }\n      ]\n    }\n  ]\n}",
+				"jsonBody": "={\n  \"contents\": [\n    {\n      \"parts\": [\n        {\n          \"inlineData\": {\n            \"mimeType\": \"application/pdf\",\n            \"data\": \"{{ $json.base64Pdf }}\"\n          }\n        },\n        {\n          \"text\": \"This is a halal lunch menu for Uzumasa Campus cafeteria. The menu lists meals available on Tuesdays and Thursdays.\\n\\nExtract every halal meal entry and return ONLY a JSON array, no markdown, no explanation.\\nEach object must have these fields:\\n- \\\"dish_name\\\": string\\n- \\\"category\\\": always the literal string \\\"Halal\\\"\\n- \\\"subcategory\\\": always the literal string \\\"Halal\\\"\\n- \\\"day_name\\\": \\\"Tuesday\\\" or \\\"Thursday\\\"\\n- \\\"menu_date\\\": \\\"YYYY-MM-DD\\\" (infer from the month/year on the poster and the day names)\\n\\nRules:\\n- If a dish name is obscured, crossed out, covered, or unreadable, skip that entry entirely — do not include it in the output.\\n- Remove the word \\\"Halal\\\" from the beginning of dish names if present, and ensure the first letter is capitalized.\\n- IMPORTANT: Ignore the date range shown in the title/header. Derive each item's date solely from the actual dates in the table rows themselves.\\n- CRITICAL — The current year is 2026. All menu_date values MUST use 2026 as the year, never 2024 or any other year. Verify every date before outputting.\\n- Do not invent calories, protein, fat, sodium, or allergen values. This poster does not contain that data — leave those fields out entirely (do not include the keys).\\n\\nExample output:\\n[\\n  { \\\"dish_name\\\": \\\"Chicken Biryani\\\", \\\"category\\\": \\\"Halal\\\", \\\"subcategory\\\": \\\"Halal\\\", \\\"day_name\\\": \\\"Tuesday\\\", \\\"menu_date\\\": \\\"2026-05-20\\\" },\\n  { \\\"dish_name\\\": \\\"Lamb Curry\\\", \\\"category\\\": \\\"Halal\\\", \\\"subcategory\\\": \\\"Halal\\\", \\\"day_name\\\": \\\"Thursday\\\", \\\"menu_date\\\": \\\"2026-05-22\\\" }\\n]\\n\\nReturn only the JSON array.\"\n        }\n      ]\n    }\n  ],\n  \"generationConfig\": {\n    \"response_mime_type\": \"application/json\"\n  }\n}",
 				"options": {}
 			},
 			"id": "b1d2e3f4-a007-4007-8007-000000000007",
-			"name": "Claude: Extract Halal Menu",
+			"name": "Extract Menu (Gemini)",
 			"type": "n8n-nodes-base.httpRequest",
 			"typeVersion": 4.2,
 			"position": [
@@ -176,192 +166,31 @@
 			],
 			"credentials": {
 				"httpHeaderAuth": {
-					"id": "YOUR_CREDENTIAL_ID",
-					"name": "Header Auth account"
+					"id": "0AvpPIBErXdxpsms",
+					"name": "Gemini API Key"
 				}
 			}
 		},
 		{
 			"parameters": {
-				"jsCode": "const content = $input.all()[0].json.content;\n\n// This workflow only ever scrapes one campus, so the campus is a\n// constant. It used to fall back to 'Unknown', which wrote rows the bot\n// cannot match to any subscriber and showed up as a missing menu.\nconst campus = 'Uzumasa';\n\nconst textBlock = content.find(block => block.type === 'text');\nif (!textBlock) throw new Error('No text block in Claude response');\n\nconst rawText = textBlock.text;\n\n// Clean markdown fences if present\nconst cleaned = rawText.replace(/```json|```/g, '').trim();\n\nlet dishes;\ntry {\n  dishes = JSON.parse(cleaned);\n} catch(e) {\n  throw new Error('Parse failed: ' + e.message);\n}\n\nif (!Array.isArray(dishes)) {\n  throw new Error('Not an array');\n}\n\nconst weekOf = dishes[0]?.menu_date || new Date().toISOString().slice(0, 10);\n\nreturn dishes\n  .filter(dish => dish.dish_name && dish.dish_name.trim() !== '')\n  .map(dish => ({\n    campus,\n    week_of: weekOf.substring(0, 10),\n    day_name: dish.day_name || null,\n    menu_date: dish.menu_date ? dish.menu_date.substring(0, 10) : null,\n    category: 'Halal',\n    subcategory: 'Halal',\n    dish_name: dish.dish_name.trim(),\n    allergens: null,\n    calories: null,\n    protein: null,\n    fat: null,\n    sodium: null,\n    price: 400,\n  }));"
+				"jsCode": "const responseData = $input.all()[0].json;\n\nconst parts = responseData.candidates?.[0]?.content?.parts;\nif (!parts || !parts[0]) {\n  throw new Error(\n    'No content in Gemini response. finishReason=' +\n    responseData.candidates?.[0]?.finishReason +\n    ' promptFeedback=' + JSON.stringify(responseData.promptFeedback) +\n    ' error=' + JSON.stringify(responseData.error)\n  );\n}\nconst rawText = parts[0].text;\nif (!rawText) throw new Error('No text in Gemini response');\n\nconst campus = 'Uzumasa';\nconst weekOf = new Date().toISOString().slice(0, 10);\n\nlet dishes;\ntry {\n  dishes = JSON.parse(rawText);\n} catch(e) {\n  const match = rawText.match(/```(?:json)?\\s*([\\s\\S]*?)```/);\n  if (match) {\n    dishes = JSON.parse(match[1].trim());\n  } else {\n    throw new Error('Parse failed: ' + e.message + '\\\\nRaw: ' + rawText.slice(0, 200));\n  }\n}\nif (!Array.isArray(dishes)) throw new Error('Not an array');\n\nreturn dishes\n  .filter(d => d.dish_name && d.dish_name.trim() !== '')\n  .map(d => ({\n    campus,\n    week_of: weekOf,\n    day_name: d.day_name || null,\n    menu_date: d.menu_date ? d.menu_date.slice(0, 10) : null,\n    category: d.category || null,\n    subcategory: d.subcategory || null,\n    dish_name: d.dish_name,\n    allergens: d.allergens || null,\n    calories: d.calories || null,\n    protein: d.protein || null,\n    fat: d.fat || null,\n    sodium: d.sodium || null,\n  }));"
 			},
 			"id": "b1d2e3f4-a008-4008-8008-000000000008",
 			"name": "Claude Output Parser",
 			"type": "n8n-nodes-base.code",
 			"typeVersion": 2,
 			"position": [
-				1104,
+				1120,
 				-128
 			]
 		},
 		{
 			"parameters": {
-				"schema": {
-					"__rl": true,
-					"mode": "list",
-					"value": "public"
-				},
-				"table": {
-					"__rl": true,
-					"value": "menu_items",
-					"mode": "list",
-					"cachedResultName": "menu_items"
-				},
-				"columns": {
-					"mappingMode": "autoMapInputData",
-					"value": {
-						"id": 0,
-						"calories": 0,
-						"protein": 0,
-						"fat": 0,
-						"sodium": 0,
-						"price": 0
-					},
-					"matchingColumns": [
-						"id"
-					],
-					"schema": [
-						{
-							"id": "id",
-							"displayName": "id",
-							"required": false,
-							"defaultMatch": true,
-							"display": true,
-							"type": "number",
-							"canBeUsedToMatch": true,
-							"removed": false
-						},
-						{
-							"id": "campus",
-							"displayName": "campus",
-							"required": true,
-							"defaultMatch": false,
-							"display": true,
-							"type": "string",
-							"canBeUsedToMatch": true
-						},
-						{
-							"id": "week_of",
-							"displayName": "week_of",
-							"required": true,
-							"defaultMatch": false,
-							"display": true,
-							"type": "string",
-							"canBeUsedToMatch": true
-						},
-						{
-							"id": "day_name",
-							"displayName": "day_name",
-							"required": true,
-							"defaultMatch": false,
-							"display": true,
-							"type": "string",
-							"canBeUsedToMatch": true
-						},
-						{
-							"id": "menu_date",
-							"displayName": "menu_date",
-							"required": true,
-							"defaultMatch": false,
-							"display": true,
-							"type": "string",
-							"canBeUsedToMatch": true
-						},
-						{
-							"id": "category",
-							"displayName": "category",
-							"required": false,
-							"defaultMatch": false,
-							"display": true,
-							"type": "string",
-							"canBeUsedToMatch": true
-						},
-						{
-							"id": "dish_name",
-							"displayName": "dish_name",
-							"required": true,
-							"defaultMatch": false,
-							"display": true,
-							"type": "string",
-							"canBeUsedToMatch": true
-						},
-						{
-							"id": "allergens",
-							"displayName": "allergens",
-							"required": false,
-							"defaultMatch": false,
-							"display": true,
-							"type": "string",
-							"canBeUsedToMatch": true
-						},
-						{
-							"id": "calories",
-							"displayName": "calories",
-							"required": false,
-							"defaultMatch": false,
-							"display": true,
-							"type": "number",
-							"canBeUsedToMatch": true
-						},
-						{
-							"id": "protein",
-							"displayName": "protein",
-							"required": false,
-							"defaultMatch": false,
-							"display": true,
-							"type": "number",
-							"canBeUsedToMatch": true
-						},
-						{
-							"id": "fat",
-							"displayName": "fat",
-							"required": false,
-							"defaultMatch": false,
-							"display": true,
-							"type": "number",
-							"canBeUsedToMatch": true
-						},
-						{
-							"id": "sodium",
-							"displayName": "sodium",
-							"required": false,
-							"defaultMatch": false,
-							"display": true,
-							"type": "number",
-							"canBeUsedToMatch": true
-						},
-						{
-							"id": "created_at",
-							"displayName": "created_at",
-							"required": false,
-							"defaultMatch": false,
-							"display": true,
-							"type": "dateTime",
-							"canBeUsedToMatch": true
-						},
-						{
-							"id": "subcategory",
-							"displayName": "subcategory",
-							"required": false,
-							"defaultMatch": false,
-							"display": true,
-							"type": "string",
-							"canBeUsedToMatch": true
-						},
-						{
-							"id": "price",
-							"displayName": "price",
-							"required": false,
-							"defaultMatch": false,
-							"display": true,
-							"type": "number",
-							"canBeUsedToMatch": true
-						}
-					],
-					"attemptToConvertTypes": false,
-					"convertFieldsToString": false
-				},
-				"options": {}
+				"operation": "executeQuery",
+				"query": "WITH src AS (\n  SELECT * FROM jsonb_to_recordset(convert_from(decode($1, 'base64'), 'UTF8')::jsonb)\n    AS x(campus text, week_of text, day_name text, menu_date text, category text, subcategory text,\n         dish_name text, allergens text, calories integer, protein numeric, fat numeric, sodium numeric)\n), del AS (\n  DELETE FROM menu_items\n   WHERE campus = 'Uzumasa' AND category = 'Halal'\n     AND menu_date IN (SELECT DISTINCT menu_date FROM src)\n)\nINSERT INTO menu_items\n  (campus, week_of, day_name, menu_date, category, subcategory, dish_name, allergens, calories, protein, fat, sodium)\nSELECT campus, week_of, day_name, menu_date, category, subcategory, dish_name, allergens, calories, protein, fat, sodium\n  FROM src\nON CONFLICT (campus, menu_date, dish_name, subcategory) DO UPDATE SET\n  week_of   = EXCLUDED.week_of,\n  day_name  = EXCLUDED.day_name,\n  category  = EXCLUDED.category,\n  allergens = EXCLUDED.allergens,\n  calories  = EXCLUDED.calories,\n  protein   = EXCLUDED.protein,\n  fat       = EXCLUDED.fat,\n  sodium    = EXCLUDED.sodium",
+				"options": {
+					"queryReplacement": "={{ $json.rows_b64 }}"
+				}
 			},
 			"id": "b1d2e3f4-a009-4009-8009-000000000009",
 			"name": "Insert rows in a table",
@@ -374,7 +203,7 @@
 			"retryOnFail": true,
 			"credentials": {
 				"postgres": {
-					"id": "YOUR_CREDENTIAL_ID",
+					"id": "lQtOsRtHK1YErWfA",
 					"name": "Postgres account"
 				}
 			},
@@ -396,6 +225,20 @@
 			"position": [
 				224,
 				80
+			]
+		},
+		{
+			"parameters": {
+				"mode": "runOnceForAllItems",
+				"jsCode": "// Pack every parsed row into one base64 blob for a single INSERT ... ON CONFLICT.\n// Postgres raises a unique violation for *any* duplicate key in a multi-row\n// INSERT, and the Halal poster repeats a whole month every run, so one row that\n// already exists used to abort the entire batch and nothing new was ever stored.\nconst rows = $input\n  .all()\n  .map((item) => item.json)\n  .filter((r) => r.dish_name && r.menu_date);\n\nreturn [{ json: { rows_b64: Buffer.from(JSON.stringify(rows), 'utf8').toString('base64'), rows: rows.length } }];"
+			},
+			"id": "pack-rows-1793633318387",
+			"name": "Pack rows",
+			"type": "n8n-nodes-base.code",
+			"typeVersion": 2,
+			"position": [
+				1112,
+				-128
 			]
 		}
 	],
@@ -467,14 +310,25 @@
 			"main": [
 				[
 					{
-						"node": "Claude: Extract Halal Menu",
+						"node": "Extract Menu (Gemini)",
 						"type": "main",
 						"index": 0
 					}
 				]
 			]
 		},
-		"Claude: Extract Halal Menu": {
+		"Claude Output Parser": {
+			"main": [
+				[
+					{
+						"node": "Pack rows",
+						"type": "main",
+						"index": 0
+					}
+				]
+			]
+		},
+		"Extract Menu (Gemini)": {
 			"main": [
 				[
 					{
@@ -485,7 +339,7 @@
 				]
 			]
 		},
-		"Claude Output Parser": {
+		"Pack rows": {
 			"main": [
 				[
 					{
@@ -500,17 +354,12 @@
 	"active": true,
 	"settings": {
 		"executionOrder": "v1",
-		"binaryMode": "separate",
-		"availableInMCP": false,
-		"timeSavedMode": "fixed",
 		"timezone": "Asia/Tokyo",
-		"callerPolicy": "workflowsFromSameOwner"
+		"callerPolicy": "workflowsFromSameOwner",
+		"availableInMCP": false
 	},
-	"versionId": "b1d2e3f4-b000-4000-8000-000000000000",
-	"meta": {
-		"templateCredsSetupCompleted": true,
-		"instanceId": "5b4a0ca6498fd61cba60c9657cf36de7506227ece441bf76eec1568c00adef6b"
-	},
+	"versionId": "152e8e31-bb96-4733-938b-2bf336917aec",
+	"meta": null,
 	"id": "RKjiJCD6UhNQ3ygQ",
 	"tags": []
 }
