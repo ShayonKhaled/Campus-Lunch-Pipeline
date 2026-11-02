@@ -13,6 +13,41 @@ if (!fs.existsSync(DOWNLOAD_DIR)) fs.mkdirSync(DOWNLOAD_DIR);
 
 app.get('/health', (_, res) => res.json({ status: 'ok' }));
 
+/**
+ * SharePoint hands out two shapes of file link, and they do not download alike.
+ *
+ *   ":b:/g/personal/…"            a guest (share) link. "?download=1" is honoured
+ *                                 anonymously, no session needed.
+ *   ":b:/r/personal/…/onedrive.aspx?id=…"
+ *                                 a viewer link. "?download=1" returns the OneDrive
+ *                                 page instead of the file, and only the saved
+ *                                 session can fetch it — via download.aspx with the
+ *                                 server-relative path as SourceUrl.
+ *
+ * The 2026-11-02 email switched to viewer links, so the old code was saving the
+ * OneDrive HTML page and reporting success: Gemini then rejected it with a bare
+ * "Bad request", and the week was never scraped.
+ */
+function toDownloadUrl(url) {
+  const parsed = new URL(url);
+  const serverRelativePath = parsed.searchParams.get('id');
+  const personalSite = parsed.pathname.match(/\/personal\/([^/]+)\//);
+
+  if (serverRelativePath && personalSite) {
+    return (
+      `${parsed.origin}/personal/${personalSite[1]}/_layouts/15/download.aspx` +
+      `?SourceUrl=${encodeURIComponent(serverRelativePath)}`
+    );
+  }
+
+  return url + (url.includes('?') ? '&' : '?') + 'download=1';
+}
+
+/** A real PDF starts with "%PDF". SharePoint errors arrive as HTML or JSON. */
+function looksLikePdf(base64Pdf) {
+  return Buffer.from(base64Pdf.slice(0, 8), 'base64').toString('latin1').startsWith('%PDF');
+}
+
 app.post('/fetch-pdf', async (req, res) => {
   const url = req.body && req.body.url;
   if (!url) return res.status(400).json({ error: 'No URL provided' });
@@ -48,10 +83,9 @@ app.post('/fetch-pdf', async (req, res) => {
     await page.screenshot({ path: '/home/shayonised/menu-fetcher/debug.png' });
 
     // Use page.evaluate to fetch the PDF as base64 using the browser's authenticated fetch
-    const base64Pdf = await page.evaluate(async (shareUrl) => {
-      // Build download URL
-      const downloadUrl = shareUrl + (shareUrl.includes('?') ? '&' : '?') + 'download=1';
-      const response = await fetch(downloadUrl, { credentials: 'include' });
+    const downloadUrl = toDownloadUrl(url);
+    const base64Pdf = await page.evaluate(async (target) => {
+      const response = await fetch(target, { credentials: 'include' });
       if (!response.ok) throw new Error('Fetch failed: ' + response.status);
       const buffer = await response.arrayBuffer();
       const bytes = new Uint8Array(buffer);
@@ -60,9 +94,21 @@ app.post('/fetch-pdf', async (req, res) => {
         binary += String.fromCharCode(bytes[i]);
       }
       return btoa(binary);
-    }, url);
+    }, downloadUrl);
 
     await browser.close();
+
+    // Never claim success for something that is not a PDF. Returning the
+    // OneDrive page as if it were the menu is what made this fail silently.
+    if (!looksLikePdf(base64Pdf)) {
+      return res.status(502).json({
+        error:
+          'SharePoint returned a page, not a PDF. The saved session is probably expired ' +
+          '(run save-session.js on this VM) or the link is a viewer link that needs it.',
+        downloadUrl,
+      });
+    }
+
     res.json({ success: true, base64Pdf });
 
   } catch (err) {

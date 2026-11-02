@@ -33,6 +33,17 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
   parsers throw when the newest extracted `menu_date` is outside
   `today-1 .. today+14`, which is what a wrong-email match looks like. The Halal
   workflow is exempt: it deliberately scrapes weeks ahead.
+- **The fetcher saved the OneDrive page and called it a PDF.** The 2026-11-02 email
+  switched from guest links (`:b:/g/personal/…?e=…`, where `?download=1` works
+  anonymously) to viewer links (`:b:/r/personal/…/onedrive.aspx?id=…`), which serve
+  the OneDrive viewer page for `?download=1`. The fetcher returned that HTML as
+  `success: true, base64Pdf`, Gemini rejected it with a bare 400 "invalid
+  argument", and nothing was stored. It now converts a viewer link to
+  `download.aspx?SourceUrl=<server-relative path>`, verifies the payload really
+  starts with `%PDF`, and answers 502 with a plain explanation otherwise. The
+  same deploy also needs an interactive `save-session.js` on the fetcher VM: the
+  saved Microsoft session was expired, which is why only guest links still
+  worked.
 
 ## [1.1.0] - 2026-06-14
 ### Added
