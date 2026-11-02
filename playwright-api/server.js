@@ -6,8 +6,8 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-const SESSION_FILE = '/home/shayonised/menu-fetcher/session.json';
-const DOWNLOAD_DIR = '/home/shayonised/menu-fetcher/downloads';
+const SESSION_FILE = process.env.SESSION_FILE || '/home/shayonised/menu-fetcher/session.json';
+const DOWNLOAD_DIR = process.env.DOWNLOAD_DIR || '/home/shayonised/menu-fetcher/downloads';
 
 if (!fs.existsSync(DOWNLOAD_DIR)) fs.mkdirSync(DOWNLOAD_DIR);
 
