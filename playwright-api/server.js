@@ -61,11 +61,26 @@ app.post('/fetch-pdf', async (req, res) => {
     });
     const page = await context.newPage();
 
-    // First navigate to the SharePoint page to establish session
-    await page.goto(url, { waitUntil: 'networkidle', timeout: 60000 });
+    // The saved state carries the Microsoft sign-in (ESTSAUTHPERSISTENT), not
+    // SharePoint's own cookie: FedAuth is issued when the browser visits the
+    // site, by the SSO redirect chain. A cold request straight to the download
+    // endpoint never runs that chain — it either dies ("Failed to fetch", the
+    // request has no session) or bounces to the login page, which the check
+    // below reported as "Session expired" even though the session was fine.
+    // Visiting the site root first is what makes the fetch below authenticated:
+    // measured on 2026-11-03, cold = failure, warmed up = 1.29 MB application/pdf.
+    try {
+      await page.goto(new URL(url).origin + '/', { waitUntil: 'domcontentloaded', timeout: 60000 });
+      await page.waitForTimeout(3000);
+    } catch (err) {
+      console.log(`warm-up navigation failed (continuing): ${err.message.split('\n')[0]}`);
+    }
+
+    const cookies = await context.cookies();
+    const authenticated = cookies.some((c) => /^(FedAuth|rtFa|SPOIDCRL)/i.test(c.name));
 
     // Check session
-    if (page.url().includes('login.microsoftonline.com')) {
+    if (!authenticated || page.url().includes('login.microsoftonline.com')) {
       await browser.close();
 
     await fetch('https://YOUR_DISCORD_WEBHOOK_URL', {
@@ -78,9 +93,7 @@ app.post('/fetch-pdf', async (req, res) => {
       return res.status(401).json({ error: 'Session expired. Re-run save-session.js.' });
     }
 
-    // Wait for page to fully load
-    await page.waitForTimeout(5000);
-    await page.screenshot({ path: '/home/shayonised/menu-fetcher/debug.png' });
+    await page.screenshot({ path: DOWNLOAD_DIR + '/../debug.png' });
 
     // Use page.evaluate to fetch the PDF as base64 using the browser's authenticated fetch
     const downloadUrl = toDownloadUrl(url);

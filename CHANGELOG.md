@@ -33,6 +33,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
   parsers throw when the newest extracted `menu_date` is outside
   `today-1 .. today+14`, which is what a wrong-email match looks like. The Halal
   workflow is exempt: it deliberately scrapes weeks ahead.
+- **A cold download request reported a healthy session as expired.** The saved
+  `storageState` carries the Microsoft sign-in (`ESTSAUTHPERSISTENT`), not
+  SharePoint's own cookie: `FedAuth` is issued by the SSO redirect chain when the
+  browser visits the site. Fetching the file as the very first request never ran
+  that chain, so the in-page fetch either failed outright or landed on the login
+  page — reported as "Session expired" while the session was perfectly good
+  (measured 2026-11-03: cold = failure, after visiting the site = 1.29 MB
+  `application/pdf`). The fetcher now warms the context up on the SharePoint
+  origin first and only then checks for `FedAuth`/`rtFa`.
 - **The fetcher saved the OneDrive page and called it a PDF.** The 2026-11-02 email
   switched from guest links (`:b:/g/personal/…?e=…`, where `?download=1` works
   anonymously) to viewer links (`:b:/r/personal/…/onedrive.aspx?id=…`), which serve
