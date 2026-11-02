@@ -18,6 +18,21 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
   parsers fell back to the literal `'Unknown'` when the campus reference was not
   available, which produces rows the bot cannot match to any subscriber. Each
   workflow now uses its own campus as a constant.
+- **A subject-line change made the scrapers re-scrape the previous week.** On
+  2026-10-30 the weekly email's subject became "レストランのランチメニュー &
+  「さらに70円引き」キャンペーンの実施について", so the searches' exact phrase
+  `レストランのランチメニューについて` stopped matching it. The search fell back to
+  the previous week's email — still inside `newer_than:14d` — and the 10-31 runs
+  re-wrote 2026-10-26..30 instead of the coming week: Kameoka inserted the same
+  menu again under campus `'Unknown'` (the unique key includes campus, so nothing
+  collided) and Uzumasa wrote nothing at all, while the week of 2026-11-02 was
+  never stored and the bot had no menu to post on Monday. All three scrapers now
+  search `subject:ランチメニュー`, which both subject lines share, and the word is
+  short enough to survive the campaign clause changing again.
+- **A stale scrape now fails loudly instead of writing.** The Uzumasa and Kameoka
+  parsers throw when the newest extracted `menu_date` is outside
+  `today-1 .. today+14`, which is what a wrong-email match looks like. The Halal
+  workflow is exempt: it deliberately scrapes weeks ahead.
 
 ## [1.1.0] - 2026-06-14
 ### Added

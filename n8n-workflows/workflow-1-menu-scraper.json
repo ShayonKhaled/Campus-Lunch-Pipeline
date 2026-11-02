@@ -36,7 +36,7 @@
         "limit": 1,
         "simple": false,
         "filters": {
-          "q": "subject:\u30ec\u30b9\u30c8\u30e9\u30f3\u306e\u30e9\u30f3\u30c1\u30e1\u30cb\u30e5\u30fc\u306b\u3064\u3044\u3066 newer_than:14d"
+          "q": "subject:\u30e9\u30f3\u30c1\u30e1\u30cb\u30e5\u30fc newer_than:14d"
         },
         "options": {}
       },
@@ -370,7 +370,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const responseData = $input.all()[0].json;\n\n// Gemini returns: candidates[0].content.parts[0].text\nconst parts = responseData.candidates?.[0]?.content?.parts;\nif (!parts || !parts[0]) throw new Error('No content in Gemini response');\n\nconst rawText = parts[0].text;\nif (!rawText) throw new Error('No text in Gemini response');\n\nconst campus = $('Prepare PDF for Extraction').all()[0].json.campus || 'Uzumasa';\n\nlet dishes;\ntry {\n  dishes = JSON.parse(rawText);\n} catch(e) {\n  const match = rawText.match(/```(?:json)?\\\\s*([\\\\s\\\\S]*?)```/);\n  if (match) {\n    dishes = JSON.parse(match[1].trim());\n  } else {\n    throw new Error('Parse failed: ' + e.message + '\\\\nRaw: ' + rawText.slice(0, 200));\n  }\n}\n\nif (!Array.isArray(dishes)) throw new Error('Not an array');\n\nconst weekOf = dishes[0]?.menu_date || new Date().toISOString().slice(0, 10);\n\nreturn dishes\n  .filter(d => d.dish_name && d.dish_name.trim() !== '')\n  .map(d => ({\n    campus,\n    week_of: weekOf.slice(0, 10),\n    day_name: d.day_name || null,\n    menu_date: d.menu_date ? d.menu_date.slice(0, 10) : null,\n    category: d.category || null,\n    subcategory: d.subcategory || null,\n    dish_name: d.dish_name,\n    allergens: d.allergens || null,\n    calories: d.calories || null,\n    protein: d.protein || null,\n    fat: d.fat || null,\n    sodium: d.sodium || null,\n  }));"
+        "jsCode": "const responseData = $input.all()[0].json;\n\n// Gemini returns: candidates[0].content.parts[0].text\nconst parts = responseData.candidates?.[0]?.content?.parts;\nif (!parts || !parts[0]) throw new Error('No content in Gemini response');\n\nconst rawText = parts[0].text;\nif (!rawText) throw new Error('No text in Gemini response');\n\nconst campus = $('Prepare PDF for Extraction').all()[0].json.campus || 'Uzumasa';\n\nlet dishes;\ntry {\n  dishes = JSON.parse(rawText);\n} catch(e) {\n  const match = rawText.match(/```(?:json)?\\\\s*([\\\\s\\\\S]*?)```/);\n  if (match) {\n    dishes = JSON.parse(match[1].trim());\n  } else {\n    throw new Error('Parse failed: ' + e.message + '\\\\nRaw: ' + rawText.slice(0, 200));\n  }\n}\n\nif (!Array.isArray(dishes)) throw new Error('Not an array');\n\n// Staleness guard. On 2026-10-31 the subject line gained a campaign clause, the\n// Gmail search fell back to the previous week's email, and this workflow\n// re-wrote 2026-10-26..30 (as campus 'Unknown') while the week it was meant to\n// scrape was never stored - the bot had nothing to post on 2026-11-02. A weekly\n// menu is for the current or next week; anything older is a wrong email, so fail\n// loudly instead of writing it again.\nvar menuDates = dishes\n  .map(function (d) { return d.menu_date ? String(d.menu_date).slice(0, 10) : null; })\n  .filter(Boolean)\n  .sort();\nvar newestDate = menuDates[menuDates.length - 1];\nif (newestDate) {\n  var now = new Date();\n  var day = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());\n  var earliest = day - 1 * 86400000;\n  var latest = day + 14 * 86400000;\n  var newest = new Date(newestDate + 'T00:00:00Z').getTime();\n  if (newest < earliest || newest > latest) {\n    throw new Error(\n      'Stale scrape: newest menu_date is ' + newestDate + ', expected ' +\n      new Date(earliest).toISOString().slice(0, 10) + '..' +\n      new Date(latest).toISOString().slice(0, 10) +\n      '. The Gmail search matched an old email - check the subject filter in \"Search Gmail\" against this week\\'s subject line.'\n    );\n  }\n}\n\nconst weekOf = dishes[0]?.menu_date || new Date().toISOString().slice(0, 10);\n\nreturn dishes\n  .filter(d => d.dish_name && d.dish_name.trim() !== '')\n  .map(d => ({\n    campus,\n    week_of: weekOf.slice(0, 10),\n    day_name: d.day_name || null,\n    menu_date: d.menu_date ? d.menu_date.slice(0, 10) : null,\n    category: d.category || null,\n    subcategory: d.subcategory || null,\n    dish_name: d.dish_name,\n    allergens: d.allergens || null,\n    calories: d.calories || null,\n    protein: d.protein || null,\n    fat: d.fat || null,\n    sodium: d.sodium || null,\n  }));"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -562,7 +562,7 @@
           "limit": 1,
           "simple": false,
           "filters": {
-            "q": "subject:\u30ec\u30b9\u30c8\u30e9\u30f3\u306e\u30e9\u30f3\u30c1\u30e1\u30cb\u30e5\u30fc\u306b\u3064\u3044\u3066 newer_than:14d"
+            "q": "subject:\u30e9\u30f3\u30c1\u30e1\u30cb\u30e5\u30fc newer_than:14d"
           },
           "options": {}
         },

@@ -31,7 +31,7 @@
 				"limit": 1,
 				"simple": false,
 				"filters": {
-					"q": "subject:レストランのランチメニューについて newer_than:14d"
+					"q": "subject:\u30e9\u30f3\u30c1\u30e1\u30cb\u30e5\u30fc newer_than:14d"
 				},
 				"options": {}
 			},
